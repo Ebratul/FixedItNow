@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+/*
+ * FixedItNow design tokens.
+ * Direction (docs/SRS.md §11.1): bright surfaces, deep navy for trust and
+ * hierarchy, teal for positive/confirmed actions, restrained shadows.
+ * Components must use these tokens (bg-brand-700, text-ink, rounded-card…)
+ * instead of ad-hoc hex values.
+ */
+@theme {
+  /* Brand: deep navy */
+  --color-brand-50: #f1f5fb;
+  --color-brand-100: #e1eaf6;
+  --color-brand-200: #c3d3ec;
+  --color-brand-300: #94b0dc;
+  --color-brand-400: #5f86c6;
+  --color-brand-500: #3b66ad;
+  --color-brand-600: #2b5190;
+  --color-brand-700: #234173;
+  --color-brand-800: #1d3459;
+  --color-brand-900: #172a49;
+  --color-brand-950: #0d1b33;
+
+  /* Accent: teal (positive actions, confirmed states) */
+  --color-accent-50: #effaf8;
+  --color-accent-100: #d3f3ee;
+  --color-accent-200: #a8e6dd;
+  --color-accent-300: #72d2c6;
+  --color-accent-400: #3db8ab;
+  --color-accent-500: #1f9d91;
+  --color-accent-600: #167f77;
+  --color-accent-700: #14665f;
+  --color-accent-800: #14514d;
+  --color-accent-900: #134441;
+
+  /* Surfaces and text */
+  --color-canvas: #ffffff;
+  --color-surface: #f6f8fb;
+  --color-surface-strong: #eaeff6;
+  --color-line: #dde3ec;
+  --color-line-strong: #c5cedb;
+  --color-ink: #0f1c2e;
+  --color-ink-muted: #4a5a70;
+  --color-ink-subtle: #596880;
+
+  /* Status */
+  --color-success: #14665f;
+  --color-success-soft: #effaf8;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #fff6e0;
+  --color-danger: #b42318;
+  --color-danger-soft: #fef0ee;
+
+  /* Typography (Bangla glyphs fall back to Noto Sans Bengali) */
+  --font-sans: var(--font-jakarta), var(--font-bengali), ui-sans-serif, system-ui,
+    sans-serif;
+  --text-display: clamp(2.25rem, 1.55rem + 2.9vw, 3.75rem);
+  --text-display--line-height: 1.08;
+  --text-display--letter-spacing: -0.025em;
+  --text-h1: clamp(1.875rem, 1.45rem + 1.8vw, 2.75rem);
+  --text-h1--line-height: 1.15;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h2: clamp(1.5rem, 1.25rem + 1vw, 2.125rem);
+  --text-h2--line-height: 1.2;
+  --text-h2--letter-spacing: -0.015em;
+
+  /* Radii: one scale for the whole product */
+  --radius-control: 0.625rem;
+  --radius-card: 0.875rem;
+  --radius-panel: 1.25rem;
+
+  /* Shadows: soft and restrained */
+  --shadow-card: 0 1px 2px rgb(15 28 46 / 0.05), 0 1px 1px rgb(15 28 46 / 0.03);
+  --shadow-lift: 0 8px 24px -8px rgb(15 28 46 / 0.14),
+    0 2px 6px rgb(15 28 46 / 0.05);
+  --shadow-pop: 0 16px 40px -12px rgb(15 28 46 / 0.22),
+    0 4px 10px rgb(15 28 46 / 0.06);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --animate-fade-up: fade-up 0.4s var(--ease-standard) both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Page container: single source of truth for horizontal rhythm. */
+@utility container-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 76rem;
+  padding-inline: 1rem;
+  @media (min-width: 40rem) {
+    padding-inline: 1.5rem;
+  }
+  @media (min-width: 64rem) {
+    padding-inline: 2rem;
+  }
+}
+
+/* Vertical rhythm between page sections. */
+@utility section-y {
+  padding-block: 3.5rem;
+  @media (min-width: 48rem) {
+    padding-block: 5rem;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible, consistent keyboard focus for every interactive element. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-accent-200);
+    color: var(--color-ink);
+  }
+
+  /* Native dialog backdrop used by the shared Dialog component. */
+  dialog::backdrop {
+    background: rgb(13 27 51 / 0.5);
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
