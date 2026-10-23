@@ -9,23 +9,39 @@ local service professionals. Requirements and architecture live in
 | Folder | Contents |
 | --- | --- |
 | [`frontend/`](frontend) | Next.js web application (public site now; dashboards later). Frontend code only. |
-| [`backend/`](backend) | Main API. Backend code only. Not started yet. |
+| [`backend/`](backend) | Main API (NestJS 12, Prisma 7, PostgreSQL, Better Auth). Backend code only. |
 | [`rag_agent/`](rag_agent) | AI assistant / RAG service. AI-agent code only. Not started yet. |
 | [`docs/`](docs) | SRS, architecture notes, and the implementation plan. |
 
-## Running the frontend
+## Running locally
+
+Full instructions, environment variables, and Google OAuth setup: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ```bash
+# database + backend
+cd backend
+docker compose up -d db            # or use your own PostgreSQL
+cp .env.example .env               # edit; set BETTER_AUTH_SECRET (openssl rand -base64 32)
+npm install && npx prisma migrate dev && npm run db:seed
+npm run start:dev                  # http://localhost:4000
+
+# frontend (another terminal)
 cd frontend
-cp .env.example .env.local   # optional; see the file for NEXT_PUBLIC_SITE_URL
-npm install
-npm run dev                  # http://localhost:3000
+cp .env.example .env.local
+npm install && npm run dev         # http://localhost:3000
 ```
 
-Checks: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
+In development, verification and password-reset links are printed in the backend terminal.
+
+Checks: `npm run lint`, `npm run typecheck`, `npm test` in each of `frontend/` and `backend/`;
+`npm run test:e2e` in `backend/` (needs a disposable `*_test` database).
 
 ## Status
 
-See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md). The public
-website is implemented as a preview. Accounts, professional listings, search,
-and bookings are not built yet, and the UI says so rather than faking them.
+See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md). The public website, accounts
+(email/password and Google), email verification, password reset, and customer/worker onboarding are
+implemented. Public professional listings, search, bookings, payments, and identity-document
+verification are not built yet, and the UI says so rather than faking them. Google sign-in and
+real email delivery need your own credentials and have not been verified against the real services.
+
+Docs: [ARCHITECTURE](docs/ARCHITECTURE.md) · [API](docs/API.md) · [SECURITY](docs/SECURITY.md) · [DEPLOYMENT](docs/DEPLOYMENT.md)

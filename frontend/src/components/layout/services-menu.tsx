@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { SERVICE_CATEGORIES } from "@/lib/categories";
 import { cn } from "@/lib/cn";
+import { useDismiss } from "@/lib/use-dismiss";
 
 const FEATURED = SERVICE_CATEGORIES.slice(0, 6);
 
@@ -15,28 +16,12 @@ const FEATURED = SERVICE_CATEGORIES.slice(0, 6);
  */
 export function ServicesMenu() {
   const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
   const rootRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const active = pathname.startsWith("/services");
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        rootRef.current?.querySelector("button")?.focus();
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  useDismiss(open, close, rootRef);
 
   return (
     <div ref={rootRef} className="relative">

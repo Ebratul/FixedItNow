@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import { LogIn } from "lucide-react";
-import { ComingSoon } from "@/components/layout/coming-soon";
+import Link from "next/link";
+import { Suspense } from "react";
+import { AuthShell } from "@/components/auth/auth-shell";
+import { LoginForm } from "@/components/auth/login-form";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
   title: "Log in",
@@ -9,10 +12,21 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <ComingSoon icon={LogIn} title="Log in is not available yet">
-      Accounts are being built and will be released in an upcoming step. There
-      is nothing to sign in to right now, and no data is collected on this
-      page.
-    </ComingSoon>
+    <AuthShell
+      title="Welcome back"
+      description="Log in to your FixedItNow account."
+      footer={
+        <>
+          New to FixedItNow?{" "}
+          <Link href="/register" className="font-semibold text-brand-700 hover:underline">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      <Suspense fallback={<Skeleton className="h-64" />}>
+        <LoginForm />
+      </Suspense>
+    </AuthShell>
   );
 }

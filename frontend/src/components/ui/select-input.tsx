@@ -9,7 +9,7 @@ type SelectInputProps = Omit<ComponentProps<"select">, "id"> & {
   hint?: string;
   error?: string;
   hideLabel?: boolean;
-  options: readonly string[];
+  options: readonly (string | { value: string; label: string })[];
   placeholder: string;
 };
 
@@ -36,11 +36,15 @@ export function SelectInput({
           {...props}
         >
           <option value="">{placeholder}</option>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
+          {options.map((option) => {
+            const { value, label } =
+              typeof option === "string" ? { value: option, label: option } : option;
+            return (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            );
+          })}
         </select>
         <ChevronDown
           className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-ink-subtle"

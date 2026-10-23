@@ -1,0 +1,104 @@
+# Setup and deployment
+
+## Local development
+
+Requirements: Node 24, PostgreSQL 16+ (Docker optional).
+
+```bash
+# 1. Database (either)
+cd backend && docker compose up -d db     # postgres on 127.0.0.1:5433
+#    ...or use any local Postgres and create fixeditnow_dev + fixeditnow_test
+
+# 2. Backend
+cp .env.example .env                      # then edit; never commit .env
+openssl rand -base64 32                   # paste into BETTER_AUTH_SECRET
+npm install
+npx prisma migrate dev                    # applies backend/prisma/migrations to DATABASE_URL
+npm run db:seed                           # service categories only
+npm run start:dev                         # http://localhost:4000
+
+# 3. Frontend
+cd ../frontend
+cp .env.example .env.local
+npm install
+npm run dev                               # http://localhost:3000
+```
+
+Open http://localhost:3000/register. With `MAIL_TRANSPORT=console` the
+verification/reset links are printed in the **backend terminal**.
+
+### Making an admin
+```bash
+cd backend && npm run admin:grant -- you@example.com     # user must exist and be verified
+npm run admin:grant -- you@example.com --revoke
+```
+
+### Tests
+```bash
+cd backend  && npm test && npm run test:e2e     # e2e needs TEST_DATABASE_URL (name must end in _test)
+cd frontend && npm test
+```
+The e2e runner **refuses** any database whose name does not end in `_test`
+because it truncates tables.
+
+## Environment variables
+
+### Backend (`backend/.env`)
+| Variable | Secret? | Notes |
+| --- | --- | --- |
+| `NODE_ENV` | no | `development` \| `test` \| `production` |
+| `PORT` | no | default 4000 |
+| `DATABASE_URL` | **yes** | PostgreSQL connection string |
+| `TEST_DATABASE_URL` | **yes** | disposable DB, name ends `_test` (tests only) |
+| `BETTER_AUTH_SECRET` | **yes** | >= 32 random chars |
+| `BETTER_AUTH_URL` | no | **public web origin** (https in production) |
+| `FRONTEND_ORIGIN` | no | same origin; used for origin checks |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ID no / **secret yes** | both or neither |
+| `MAIL_TRANSPORT` | no | `console` (dev only) or `smtp` (required in production) |
+| `EMAIL_FROM` | no | sender address |
+| `SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE` | no | |
+| `SMTP_USER` / `SMTP_PASS` | **yes** | |
+| `TRUST_PROXY` | no | reverse-proxy hops for Express (default 1) |
+| `TRUSTED_PROXIES` | no | **required in production**; see below |
+| `RATE_LIMIT_ENABLED` | no | cannot be `false` in production |
+
+### Frontend (`frontend/.env.local`)
+| Variable | Secret? | Notes |
+| --- | --- | --- |
+| `BACKEND_URL` | no | where Next proxies `/api/v1/*`. **Read at build time** (rewrites are baked into the build); set it for `npm run build`. |
+| `NEXT_PUBLIC_SITE_URL` | no | production origin; enables absolute OG URLs and sitemap |
+
+Nothing secret is ever exposed to the browser: only `NEXT_PUBLIC_*` values are bundled.
+
+## Google OAuth setup (Google Cloud console)
+
+1. APIs & Services -> OAuth consent screen: choose External, set app name and support email, add scopes `openid`, `email`, `profile`. While in "Testing", add your Google account as a test user.
+2. Credentials -> Create credentials -> OAuth client ID -> **Web application**.
+3. Authorized JavaScript origins: `http://localhost:3000` (and your production origin).
+4. Authorized redirect URIs (must match exactly):
+   - development: `http://localhost:3000/api/v1/auth/callback/google`
+   - production: `https://YOUR-DOMAIN/api/v1/auth/callback/google`
+5. Put the client ID and secret in `backend/.env` (or your host's secret store), restart the backend. `GET /api/v1/config/auth` should report `googleEnabled: true` and the "Continue with Google" button appears.
+
+The redirect URI uses the **web app's** origin because the web app proxies the callback to the backend.
+
+## Email
+
+Production requires `MAIL_TRANSPORT=smtp` with a real provider (any SMTP service). Configure SPF/DKIM
+for the sender domain. Until SMTP is configured, users cannot verify their email and therefore cannot log in.
+
+## Production checklist
+
+- HTTPS everywhere; `BETTER_AUTH_URL` / `FRONTEND_ORIGIN` are the https origin.
+- **Route `/api/v1/*` to the backend at your reverse proxy / CDN** and have it set `X-Forwarded-For` to the real client IP (overwriting client-supplied values). The Next.js rewrite works for development but does not add the client IP.
+- Set `TRUSTED_PROXIES` to the addresses of proxies **in front of the backend** whose forwarded chain should be skipped (CDN/LB ranges). If your single proxy appends the client IP and is the direct peer, set a placeholder such as `127.0.0.1` so the right-to-left walk is enabled. The backend refuses to start without it.
+- Set `TRUST_PROXY` to the number of proxy hops.
+- Run `npx prisma migrate deploy` (never `migrate dev`/`reset`) during release, after reviewing new migration SQL, against a backed-up database.
+- Rate limiting for non-auth routes is per-instance memory; use Redis if you scale out.
+- Grant the first admin with `npm run admin:grant` from a trusted machine.
+- Serve the web app and API on the **same site** (same origin recommended).
+
+## Migrations
+
+`backend/prisma/migrations/20261023212432_init_auth_and_onboarding` creates all tables from scratch (the
+database was empty). It was applied only to disposable local databases in this step. **No production database exists or was touched.**

@@ -10,7 +10,7 @@ export const FAQS: Faq[] = [
   {
     question: "Can I book a professional today?",
     answer:
-      "Not yet. The public website is live in preview, but accounts, professional listings, and bookings are being released in stages. Pages that depend on those features say so clearly.",
+      "Not yet. You can create an account and set up a customer or worker profile, but public professional listings, search, and bookings are still being built. Pages that depend on those features say so clearly.",
   },
   {
     question: "How will professionals be verified?",
@@ -25,7 +25,7 @@ export const FAQS: Faq[] = [
   {
     question: "How can I join as a professional?",
     answer:
-      "Worker registration is not open yet. The Become a worker page explains what to expect and will link to sign-up when it is available.",
+      "Create an account, then complete the worker profile steps and submit it for review. A reviewer approves it, asks for changes, or declines it. Identity document verification and public listings are not available yet.",
   },
   {
     question: "Which payment methods will be supported?",

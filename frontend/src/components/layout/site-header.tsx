@@ -1,9 +1,9 @@
-import { LinkButton } from "@/components/ui/button";
-import { AUTH_LINKS, PRIMARY_NAV } from "@/lib/site";
+import { PRIMARY_NAV } from "@/lib/site";
 import { Logo } from "./logo";
 import { MobileNav } from "./mobile-nav";
 import { NavLink } from "./nav-link";
 import { ServicesMenu } from "./services-menu";
+import { UserMenu } from "./user-menu";
 
 export function SiteHeader() {
   return (
@@ -29,14 +29,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-2 sm:flex">
-            <LinkButton href={AUTH_LINKS.login.href} variant="ghost">
-              {AUTH_LINKS.login.label}
-            </LinkButton>
-            <LinkButton href={AUTH_LINKS.signup.href}>
-              {AUTH_LINKS.signup.label}
-            </LinkButton>
-          </div>
+          <UserMenu />
           <MobileNav />
         </div>
       </div>

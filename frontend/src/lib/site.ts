@@ -51,5 +51,5 @@ export const FOOTER_GROUPS: { title: string; links: NavLink[] }[] = [
 
 export const AUTH_LINKS = {
   login: { href: "/login", label: "Log in" },
-  signup: { href: "/signup", label: "Sign up" },
+  signup: { href: "/register", label: "Sign up" },
 } as const;
