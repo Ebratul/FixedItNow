@@ -162,6 +162,38 @@ Invalid transitions -> `409 INVALID_DISPUTE_TRANSITION`; an admin who is party t
 
 `GET /workers/:slug` now needs no change; the web profile page calls the availability endpoint to decide whether to offer "Request a booking".
 
+## AI assistant (Step 8)
+
+Design, schemas and safety rules: [AI.md](AI.md). All paths are under `/api/v1`.
+
+| Method & path | Who | Notes |
+| --- | --- | --- |
+| `GET /ai/status` | Public | `{ available }` (whether the assistant is configured). |
+| `POST /ai/chat` | session | Body (strict) `{ message 1-1000, intent?, locale?: auto\|en\|bn, action?: message\|search }`; no user id or history field. Returns `{ kind, message, language, intent, intentSources, clarification, recommendations[{ rank, matchedOn, worker }], total, relaxations, answer, notes, mode }`. `recommendations[].worker` is the public card, re-read from PostgreSQL. Errors: `503 AI_NOT_CONFIGURED`, `429 AI_RATE_LIMITED` (+`retryAfterSeconds`), `504 AI_TIMEOUT`, `502 AI_UNAVAILABLE`. Per-user limit `AI_RATE_LIMIT_PER_MINUTE`; 30/min/IP. |
+| `GET /internal/ai/workers`, `GET /internal/ai/categories` | AI service only | Bearer `APP_API_SERVICE_TOKEN`. Same arguments and projection as `GET /workers` (first page, `pageSize` <= 24) and the active category list. `404` when the assistant is not configured; `401` for any other credential, including a user session. Not for browsers; block `/api/v1/internal/` at the proxy. |
+
+## Reviews, community, proposals and moderation (Step 9)
+
+Full rules, state machines and error codes: [COMMUNITY.md](COMMUNITY.md). Summary (all under `/api/v1`; "session" = signed-in verified user; unsafe methods need the web `Origin`; request bodies are strict, so unknown or protected fields are `400`):
+
+| Method & path | Access | Notes |
+| --- | --- | --- |
+| `POST /bookings/:id/review` | the booking's customer | `{ rating 1-5, comment? <=1000 }`. Booking must be `COMPLETED` (`422 BOOKING_NOT_REVIEWABLE`); one per booking (`409 REVIEW_EXISTS`); someone else's booking is `404`. |
+| `GET\|PUT\|DELETE /bookings/:id/review` | the booking's customer | Read own / edit within 14 days while visible (`422 EDIT_WINDOW_CLOSED`, `409 REVIEW_NOT_EDITABLE`) / withdraw (final). |
+| `GET /workers/:slug/reviews?page&pageSize` | Public | Counted reviews only (visible + booking completed) with `summary {rating, reviewCount, distribution}`; `verifiedBooking` is derived by the server; public first names only. |
+| `GET /bookings/:id` | participant | Adds `review` (customer: `{canReview, review}`; professional: a public review or null). |
+| `GET /workers`, `/workers/:slug`, `/me/favorites` | as before | `rating` (1 decimal) and `reviewCount` are now real; null/0 without reviews. |
+| `GET\|POST /community/posts`, `GET\|PATCH\|DELETE /community/posts/:id` | session | List `?scope=all\|mine`. Edit/delete: author only. 10 posts/hour/user. |
+| `GET\|POST /community/posts/:id/comments`, `PATCH\|DELETE /community/comments/:id` | session | Flat comments; edit/delete: author only. |
+| `POST /community/posts/:id/reactions`, `DELETE /community/posts/:id/reactions/:type` | session | Idempotent like; `200 { reacted, likeCount }`. |
+| `POST /community/reports`, `POST /reviews/:id/report` | session | `{ reason, details? }` (+ `targetType`, `targetId` for the first). One report per user per item (`409`), not your own content (`422`), 5/min, 20/day. Reporting hides nothing. |
+| `GET\|POST /feature-proposals`, `GET /feature-proposals/:id` | session | Sorted by votes or date; created `SUBMITTED`. |
+| `POST\|DELETE /feature-proposals/:id/vote` | session | One vote per user; `409 VOTING_CLOSED` after a decision. |
+| `GET /admin/moderation/overview`, `GET /admin/moderation/history` | admin | Counts; moderation-only audit history. |
+| `GET /admin/reports`, `GET /admin/reports/:id`, `POST /admin/reports/:id/decision` | admin | Queue (25/page), detail with context, decision `REVIEW\|RESOLVE\|DISMISS` (+ explicit `contentAction`). |
+| `POST /admin/moderation/(posts\|comments\|reviews\|proposals)/:id/visibility` | admin | `{ hidden, reason }`. |
+| `GET /admin/proposals`, `POST /admin/proposals/:id/status` | admin | Lifecycle decisions; `needsReview=true` lists proposals at the vote threshold. |
+
 ## Payments (Step 6)
 
 Design, state machines and the provider flows: [PAYMENTS.md](PAYMENTS.md). All paths are under `/api/v1`. References look like `FIN` + 24 hex characters; a malformed or foreign reference is the same `404`.

@@ -3,7 +3,7 @@
 Target architecture is in [SRS.md](SRS.md) §6–7. This file records what exists.
 
 ## Layout
-`frontend/` (Next.js), `backend/` (NestJS API + Prisma), `rag_agent/` (empty).
+`frontend/` (Next.js), `backend/` (NestJS API + Prisma), `rag_agent/` (Python FastAPI AI service, Step 8).
 The repository keeps these three top-level folders; each holds only its own code.
 
 ```
@@ -90,6 +90,23 @@ Details: [PAYMENTS.md](PAYMENTS.md). Summary:
 - **Ledger:** `payment_event` (append-only trigger, `dedupeKey` uniqueness). Money is integer BDT; provider decimals are parsed exactly (`money.ts`).
 - **CSRF:** the global Origin guard now honours `@SkipOriginCheck()`, used only by the provider callback controller.
 - **Frontend:** `/bookings/[id]/pay` (checkout), `/payments` (history), `/payments/[reference]` (the return page: it asks the server and polls; a URL parameter is never read as status).
+
+## Reviews, community and moderation (Step 9)
+Details: [COMMUNITY.md](COMMUNITY.md). Summary:
+- **Modules:** `reviews/` (booking-linked reviews, `ratings.ts` = the one definition of a counted review), `community/` (posts, comments, likes, reports; also hosts the proposals and moderation controllers), `proposals/`, `moderation/` (admin API). Reviews are not a dependency of bookings: the booking detail calls the pure `reviewSummary()` query, like payments.
+- **Ratings are computed, not cached:** one grouped query per page of workers (`ratingSummaries`), counting reviews that are `VISIBLE` and whose booking is `COMPLETED`. `WorkersService`, `FavoritesService` and the AI assistant's hydration all go through `toCard(row, summary)`.
+- **One authority for privileged actions:** `ModerationService`. Every state change is a conditional `UPDATE ... WHERE status = <read>` in a transaction together with its `audit_log` row; content visibility and report status are separate and linked only by an explicit `contentAction`.
+- **Plain text only** for all user content; the web app renders it as React text. Community, proposals and admin pages are signed-in and `noindex`; reviews on public profiles are public.
+- **Database invariants** (migration SQL): rating range, text lengths, hidden-needs-reason, report-has-exactly-one-matching-target, unique review/reaction/vote/report.
+
+## AI assistant (Step 8)
+Details: [AI.md](AI.md). Summary:
+- **A separate Python FastAPI service in `rag_agent/`** (private; browsers never reach it). The main API authenticates the user, rate-limits per user, calls it with a service token, validates its answer with a strict schema, and **re-reads every recommended worker from PostgreSQL** (`WorkersService.findCardsByIds`: the same `ELIGIBLE_WORKER` rule plus the stated filters). Worker facts shown to users never come from the AI.
+- **The AI service has no database access.** Its tools are two read-only endpoints, `GET /api/v1/internal/ai/{workers,categories}`, guarded by `ServiceTokenGuard` and backed by the public search code. Two different secrets, one per direction.
+- **Pipeline, not an agent:** screen -> catalogue -> extract intent (OpenRouter, optional) -> merge -> route (knowledge answer | clarification | search -> verify -> respond). The model never selects tools, arguments or worker ids. LangChain/LangGraph and a vector store were evaluated and deliberately not used (see AI.md).
+- **No schema change, nothing persisted.** The conversation state is the filter set, held by the client and re-validated each request.
+- **Frontend:** `/assistant` (login required) with chips for the active filters, suggested follow-ups, relaxations, and a link to the normal search that doubles as the failure fallback.
+- `WorkersService.search` now builds its `where` through the exported `buildSearchWhere` (behaviour unchanged; reused for hydration).
 
 ## Account linking
 Google never auto-links to an existing email account (see SECURITY.md). Linking is explicit

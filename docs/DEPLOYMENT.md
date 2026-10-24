@@ -37,6 +37,7 @@ npm run admin:grant -- you@example.com --revoke
 ```bash
 cd backend  && npm test && npm run test:e2e     # e2e needs TEST_DATABASE_URL (name must end in _test)
 cd frontend && npm test
+cd rag_agent && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest -q && .venv/bin/python -m evals.run_eval
 ```
 The e2e runner **refuses** any database whose name does not end in `_test`
 because it truncates tables.
@@ -77,6 +78,9 @@ because it truncates tables.
 | `NEXT_PUBLIC_SITE_URL` | no | production origin; enables absolute OG URLs and sitemap |
 
 Nothing secret is ever exposed to the browser: only `NEXT_PUBLIC_*` values are bundled.
+
+### AI assistant variables (optional; see [AI.md](AI.md))
+Backend: `AI_SERVICE_URL`, `AI_SERVICE_TOKEN` (**secret**), `APP_API_SERVICE_TOKEN` (**secret**), `AI_REQUEST_TIMEOUT_SECONDS` (30), `AI_RATE_LIMIT_PER_MINUTE` (10): all three of URL and tokens, or none (the API refuses to start otherwise). AI service (`rag_agent/.env.example`): `AI_SERVICE_TOKEN`, `APP_API_SERVICE_TOKEN` (the same two values), `APP_API_BASE_URL`, `OPENROUTER_API_KEY` (**secret**), `OPENROUTER_MODEL`, `OPENROUTER_RESPONSE_FORMAT`, limits. Run the AI service privately (`rag_agent/Dockerfile`); block `/api/v1/internal/` at the public proxy; keep `APP_ENV=production`.
 
 ## Google OAuth setup (Google Cloud console)
 

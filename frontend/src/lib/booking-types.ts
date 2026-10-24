@@ -1,3 +1,4 @@
+import type { BookingReview } from "./community";
 import type { PaymentView } from "./payment-types";
 
 export type BookingStatus =
@@ -109,6 +110,8 @@ export type BookingDetail = {
   events: BookingEvent[];
   /** Customer: full summary. Professional: only whether a verified payment exists. */
   payment: BookingPayment;
+  /** Customer: can they review, and their own review. Professional: a visible review only. */
+  review: BookingReview;
 };
 
 export type BookingPayment =

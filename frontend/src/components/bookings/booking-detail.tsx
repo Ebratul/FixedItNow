@@ -18,6 +18,7 @@ import { EVENT_LABELS, formatBdt, formatDateTime, formatDuration, formatRange } 
 import { useApi } from "@/lib/use-api";
 import { DisputeForm, DisputePanel } from "./dispute-panel";
 import { PaymentBadge } from "@/components/payments/payment-badge";
+import { ReviewPanel } from "@/components/reviews/review-panel";
 import { QuoteCard, QuoteForm } from "./quote-panel";
 import { RescheduleCard, RescheduleForm } from "./reschedule-panel";
 import { StatusBadge } from "./status-badge";
@@ -155,6 +156,8 @@ function View({ initial }: { initial: BookingDetail }) {
       </Card>
 
       {viewer === "CUSTOMER" && <PaymentCard detail={detail} />}
+
+      <ReviewPanel bookingId={booking.id} workerName={booking.worker.displayName} data={detail.review} onChanged={(review) => setDetail((d) => ({ ...d, review }))} />
 
       {actions.length > 0 && (
         <section aria-labelledby="actions-heading">

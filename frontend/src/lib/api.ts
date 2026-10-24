@@ -19,7 +19,7 @@ export class ApiError extends Error {
  */
 export async function api<T>(
   path: string,
-  init: { method?: "GET" | "PUT" | "POST" | "DELETE"; body?: unknown; headers?: Record<string, string> } = {},
+  init: { method?: "GET" | "PUT" | "PATCH" | "POST" | "DELETE"; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
   let response: Response;
   try {

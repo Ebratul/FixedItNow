@@ -96,6 +96,34 @@ Known limitations (Step 6): nothing was verified against the real providers; the
 arrived, would close the attempt (a later provider-verified payment still upgrades it); no scheduler for reconciliation; callback rate limits are per instance;
 no admin UI; personal data minimisation toward providers has not had a legal review.
 
+## AI assistant (Step 8)
+
+Full model: [AI.md](AI.md). Controls:
+- **Model output is untrusted data.** It is parsed, validated against closed types, and each field is sanitised; invalid or unknown values are discarded. The model never chooses tools, arguments or worker ids.
+- **Grounding in two layers:** the AI service re-checks every card the search returns against the user's filters; the main API then re-reads every recommended id from PostgreSQL under `ELIGIBLE_WORKER` plus the stated filters and drops the rest. Unknown fields in the AI response are a `502`; source links must be site-relative.
+- **Least privilege:** the AI service has no database credentials; its only tools are two read-only endpoints behind `ServiceTokenGuard` (constant-time bearer comparison, fails closed, `404` when unconfigured). Two different secrets (one per direction), both required to be >= 32 characters.
+- **Refusals happen in code, before any model or tool call:** another person's contact details or bookings, system prompt / keys, SQL or shell. A request to book/cancel/pay yields a note, never an action; model text that claims an action is rejected.
+- **Privacy:** the model sees only the current message, the chosen filters and the public category list. Nothing is persisted; logs hold metadata only (a test asserts message text, user id and secrets are absent). The AI service receives a hash of the user id.
+- **Abuse/cost:** login required; per-user, per-IP and per-subject limits; concurrency cap; bounded model calls (<= 2 per step) and search calls (<= 4).
+- **Findings during implementation:** (1) the first service-auth check accepted a bare token without the `Bearer` scheme, caught by a test; (2) the first retrieval threshold returned an unrelated passage for "weather in Dhaka", caught by a test and tightened; both now have regression tests, and deliberately breaking each security-critical line (token check, id re-validation, strict response schema, link allow-list, per-user limit, eligibility filter) makes a test fail.
+- **Not verified:** nothing was run against real OpenRouter or a real model, so real-model injection resistance is unmeasured. The structural defenses above do not depend on the model's behaviour; the offline evaluation includes a model that *obeys* an injection.
+
+## Reviews, community and moderation (Step 9)
+
+Full model and policies: [COMMUNITY.md](COMMUNITY.md). Controls (each has a test):
+- **Review integrity:** eligibility (customer of a `COMPLETED` booking) is decided server-side from the database; `UNIQUE (bookingId)` stops duplicates under parallel requests; bodies are strict, so `customerId`, `workerProfileId`, `status`, "verified", moderation fields are rejected; "Verified booking" is derived from a join, never a flag; hidden reviews cannot be edited or withdrawn; edits keep the previous text; only the author can edit/withdraw (others get the same `404` as a missing review).
+- **Access control / IDOR:** content ownership is checked in the `WHERE` of every write (`authorId = session user`); another user's post/comment/review is `404`; hidden/deleted content is `404` to everyone but the author (who sees a "removed" state); all admin routes use `RequireAdmin` (role re-read from the database on each request). Role/`isAdmin` in a body, query string or header does nothing (tested). Registration and onboarding cannot grant admin.
+- **Conflict of interest:** an administrator cannot moderate their own content, decide a report they filed, or decide their own proposal.
+- **Duplicates and races:** reactions and votes use `ON CONFLICT DO NOTHING` on unique indexes (parallel requests tested); one report per user per item; report decisions and proposal decisions are conditional updates (two moderators: one wins).
+- **Abuse limits:** per-IP throttles, plus per-user rolling caps from the database (10 posts/hour, 30 comments/hour, 3 proposals/day, 20 reports/day).
+- **XSS:** all content is plain text, stored verbatim and returned as JSON (`nosniff`); the UI renders text nodes only; control and bidi-override characters are rejected. Tests store `<script>`/`<img onerror>` payloads and assert they are returned as inert strings and rendered as text.
+- **Reporter and author privacy:** a report response is `{id, status, createdAt}`; content authors never learn who reported; admin views show public display names only, no emails or account ids (asserted by scanning responses); the moderation history shows only moderation actions.
+- **Audit:** every privileged action writes `audit_log` (actor from the session, target, from/to, reason) in the same transaction; a forced audit failure rolls the change back. Reasons are staff-written, bounded to 500 characters; secrets, tokens, emails and identity data are never written.
+- **Proposals:** a vote threshold only lists a proposal for admin review; it changes no status, deploys nothing, activates no category. Votes freeze once a decision is made.
+- **AI:** no AI processes review or community text (sentiment analysis was deliberately not built; see COMMUNITY.md), and the Step 8 assistant's knowledge base is curated files, so user content cannot become instructions.
+- **Finding during implementation:** the first admin queue response included the content author's internal account id; found by a response-scan test and removed.
+- **Not done:** CAPTCHA, spam/profanity filtering, per-user read limits, a separate moderator role, moderation notifications, shared-store rate limits for multi-instance deployments.
+
 ## Account-linking policy
 
 Google sign-in **never** auto-merges into an existing account because the email
@@ -123,4 +151,5 @@ with Google" gets a clear `account_not_linked` message instead of silent merging
 - No Content-Security-Policy on the web app (needs a nonce-based policy).
 - Rate-limit counters for non-auth routes are in-memory (per instance); use Redis when running more than one instance.
 - Admin has no UI yet (API + operator script only).
+- AI assistant: not tested with a real model/provider; rate-limit counters are per process; `/api/v1/internal/ai/*` is token-protected but should also be blocked at the proxy; no CSP yet (see above).
 - Dependency/vulnerability scanning is a manual `npm audit` (0 vulnerabilities at the time of writing); no CI yet.

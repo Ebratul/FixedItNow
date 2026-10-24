@@ -27,6 +27,7 @@ const base = (over: Partial<BookingDetail["booking"]> = {}, rest: Partial<Bookin
   },
   actions: [], quotes: [], rescheduleRequests: [], dispute: null, events: [],
   payment: { state: "UNPAID", canPay: false, amountBdt: 500, currency: "BDT", activeReference: null, payments: [] },
+  review: { canReview: false, review: null },
   ...rest,
 });
 

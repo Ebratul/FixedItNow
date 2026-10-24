@@ -1,11 +1,11 @@
-import { BadgeCheck, CalendarClock, Clock, Languages, MapPin, ShieldCheck, Star } from "lucide-react";
+import { BadgeCheck, CalendarClock, Clock, Languages, MapPin, ShieldCheck } from "lucide-react";
 import { FavoriteButton } from "@/components/professional/favorite-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Price } from "@/components/ui/price";
-import { Rating } from "@/components/ui/rating";
+import { ReviewsSection } from "@/components/reviews/reviews-section";
 import type { WorkerProfileData } from "@/lib/discovery-types";
 
 const PRICING_LABELS = { FIXED: "Fixed price", HOURLY: "Per hour", QUOTE: "Quote after inspection" } as const;
@@ -86,18 +86,7 @@ export function WorkerProfileView({ worker, acceptingBookings = false }: { worke
           </p>
         </section>
 
-        <section aria-labelledby="reviews-heading">
-          <h2 id="reviews-heading" className="text-h2 font-extrabold">Reviews</h2>
-          <div className="mt-3 flex items-start gap-3 rounded-card border border-dashed border-line-strong bg-surface p-4">
-            <Star className="mt-0.5 size-5 shrink-0 text-ink-subtle" aria-hidden />
-            <div className="text-sm text-ink-muted">
-              <Rating value={worker.rating} reviewCount={worker.reviewCount} />
-              <p className="mt-1">
-                Reviews will appear here after customers complete jobs. We never show invented ratings.
-              </p>
-            </div>
-          </div>
-        </section>
+        <ReviewsSection slug={worker.slug} rating={worker.rating} reviewCount={worker.reviewCount} />
       </div>
 
       <aside aria-label="Actions" className="space-y-4 lg:sticky lg:top-24 lg:self-start">

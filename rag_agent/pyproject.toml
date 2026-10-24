@@ -1,0 +1,31 @@
+[project]
+name = "fixeditnow-ai"
+version = "0.1.0"
+description = "FixedItNow AI service-discovery assistant (FastAPI)"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["error::RuntimeWarning"]
+
+[tool.ruff]
+line-length = 125
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC", "RUF"]
+ignore = ["S101", "E501"]  # asserts in tests; long lines are prompts and word lists
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "RUF001", "RUF003"]
+"evals/*" = ["S105", "S106", "RUF001"]
+"app/messages.py" = ["RUF001"]
+"app/heuristics.py" = ["RUF001"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "evals"]

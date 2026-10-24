@@ -22,6 +22,7 @@ export const PRIMARY_NAV: NavLink[] = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
   { href: "/how-it-works", label: "How it works" },
+  { href: "/community", label: "Community" },
   { href: "/become-a-worker", label: "Become a worker" },
   { href: "/help", label: "Help" },
 ];
@@ -32,6 +33,8 @@ export const FOOTER_GROUPS: { title: string; links: NavLink[] }[] = [
     links: [
       { href: "/services", label: "Browse services" },
       { href: "/workers", label: "Find professionals" },
+      { href: "/assistant", label: "AI assistant" },
+      { href: "/community", label: "Community" },
       { href: "/how-it-works", label: "How it works" },
     ],
   },

@@ -161,4 +161,48 @@ Design, rules, state machines, configuration and the sandbox checklist: [PAYMENT
 - Runtime smoke through the Next rewrite: form-encoded SSLCOMMERZ POST and bKash GET callbacks reach the backend, answer `303` to the web app; IPN answers `200 OK`; unauthenticated and foreign-Origin requests are refused; `/payments` and `/bookings/:id/pay` redirect to login.
 - **Not done:** any call to bKash or SSLCOMMERZ (sandbox or live); a real-browser pass of the new pages.
 
-## Step 7: next (not started)
+## Step 7: not started
+(Messaging / notifications are still unbuilt. Step 8 does not depend on them.)
+
+## Step 8: AI service discovery, RAG and safety - implemented, NOT verified with a real provider
+
+Design, schemas, safety rules and limitations: [AI.md](AI.md). Routes (web): `/assistant` (login required). Service: `rag_agent/` (Python FastAPI). API: `POST /ai/chat`, `GET /ai/status`, internal `GET /internal/ai/{workers,categories}`.
+
+| Capability | Status |
+| --- | --- |
+| Separate FastAPI service: validated intent extraction, rule-based fallback ("simple mode"), clarification, relaxation suggestions, knowledge answers with sources | **Implemented and tested** (offline) |
+| Worker recommendations grounded in PostgreSQL (AI returns references; the API re-reads eligible workers under the stated filters) | **Implemented and verified** (integration tests on real PostgreSQL) |
+| Read-only, token-guarded internal search tool reusing the public search code and `ELIGIBLE_WORKER` | **Implemented and verified** |
+| OpenRouter adapter (structured outputs, `require_parameters`, error mapping, no fallback model) | **Implemented and tested against mocks and a local fake server.** **No real OpenRouter request was made; no real model was evaluated.** |
+| Nest <-> Python over real HTTP (fake model) | **Implemented and verified** (`ai-contract.e2e-spec.ts`) |
+| Curated RAG (BM25 over 7 public documents, 23 chunks) | **Implemented and tested.** No embeddings/vector store (not justified at this size). |
+| Prompt-injection / privacy defenses, per-user rate limit, metadata-only logs | **Implemented and verified** (tests + mutation checks) |
+| Frontend assistant (chips, suggestions, cards, relaxations, errors, normal-search fallback) | **Implemented and component-tested**; production build served `/assistant` (login redirect verified); **not exercised in a real browser** |
+| LangChain / LangGraph, vector DB, persisted conversations, LangSmith | **Not used / not implemented**, with reasons in AI.md |
+| Real-model extraction quality (English / Bangla / Banglish) | **Not measured** (`python -m evals.run_eval --live` exists, never run) |
+
+### Verification performed
+- Python (`rag_agent/`): `pytest` 123 passed, `ruff check` clean, `mypy --strict` clean, `pip-audit` no known vulnerabilities, offline evaluation 40/40 cases (see AI.md), Docker image built, ran as a non-root user and answered `/health`.
+- Backend: typecheck, lint, 117 unit tests, 423 integration tests (real PostgreSQL; 19 AI route tests + 7 cross-process contract tests), build, `npm audit` (0), `prisma migrate diff` shows no drift (Step 8 adds no migration).
+- Frontend: lint, typecheck, 141 tests (13 new), build, `npm audit` (0).
+- Mutation checks (break a line, expect a test to fail): skip local re-verification, never refuse private requests, accept unretrieved citations, accept action claims, accept unknown categories, accept unverified cards, ignore the bearer scheme, skip the service-token check, index internal documents, unbounded retries (Python); skip the service token, hydrate without eligibility/filters, allow extra AI fields, allow external links, no per-user limit, no body validation (backend). Every one now makes a test fail (the bearer-scheme mutation initially survived, which led to a stronger test).
+- **Not done:** any call to OpenRouter; a real-browser pass of `/assistant`; axe/overflow sweeps; native-speaker review of the Bangla strings.
+
+## Step 9: Reviews, ratings, community, feature proposals, voting and admin moderation - implemented
+
+Design, policies, state machines, API and limits: [COMMUNITY.md](COMMUNITY.md). Routes (web): `/community`, `/community/[id]`, `/community/proposals`, `/admin/moderation`; reviews on `/workers/[slug]`; review panel on `/bookings/[id]`. Migration `20261027000000_step9_reviews_community` (additive).
+
+| Capability | Status |
+| --- | --- |
+| Booking-verified reviews (create / edit 14 days / withdraw), one per booking, DB constraints, parallel-safe | **Implemented and verified** |
+| Real ratings (1-decimal average, count) on cards, search, favourites, profile and AI cards; one grouped query per page | **Implemented and verified** |
+| Community posts, comments, idempotent likes, reports (unique per user/item, daily cap), proposals with one vote each | **Implemented and verified** |
+| Admin moderation API + audit (same transaction), conflict-of-interest rules, proposal lifecycle, vote threshold = admin filter only | **Implemented and verified** |
+| Web UI incl. admin moderation console | **Implemented, component-tested, and exercised in real Chrome at 5 widths (overflow + axe clean)** |
+| Sentiment analysis | **Not built, deliberately** (privacy and evaluation reasons in COMMUNITY.md) |
+| Separate moderator role; worker replies; moderation notifications; spam/profanity filters; rating sort/filter | **Not built** (deferred) |
+
+### Verification performed
+- Backend: typecheck, lint, 125 unit tests, 489 integration tests (real PostgreSQL), build, `npm audit` (0), `prisma migrate diff` no drift, migration applied to an empty database. Frontend: lint, typecheck, 158 tests, build, `npm audit` (0). Python (Step 8) regression: 123 tests.
+- Mutation checks: 19/20 caught, 1 equivalent mutant (see COMMUNITY.md).
+- Real Chrome pass: 35 page x width combinations clean; 8 flows passed. Not done: keyboard-only and screen-reader walkthroughs, load testing.

@@ -115,6 +115,16 @@ function Overview({ me }: { me: Me }) {
         </div>
       </Card>
 
+      {me.isAdmin && (
+        <Card className="mt-5 flex items-center justify-between gap-4 p-6">
+          <div>
+            <h2 className="text-lg font-bold">Moderation</h2>
+            <p className="mt-1 text-sm text-ink-muted">Reports, feature proposals and the moderation history.</p>
+          </div>
+          <LinkButton href="/admin/moderation" variant="secondary" size="sm">Open moderation</LinkButton>
+        </Card>
+      )}
+
       <Card className="mt-5 flex items-center justify-between gap-4 p-6">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-bold">

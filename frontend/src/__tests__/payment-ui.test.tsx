@@ -143,7 +143,7 @@ describe("checkout", () => {
       pricing: { model: "FIXED", unitPriceBdt: 500, agreedAmountBdt: 500, currency: "BDT" },
       confirmedAt: null, completedAt: null, cancellation: null, createdAt: "2026-11-01T06:00:00.000Z", ...booking,
     },
-    actions: [], quotes: [], rescheduleRequests: [], dispute: null, events: [],
+    actions: [], quotes: [], rescheduleRequests: [], dispute: null, events: [], review: { canReview: false, review: null },
     payment: { state: "UNPAID", canPay: true, amountBdt: 500, currency: "BDT", activeReference: null, payments: [], ...over } as BookingDetail["payment"],
   });
   const both: ProviderInfo[] = [

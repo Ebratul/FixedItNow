@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +22,13 @@ export default function WorkersPage({ searchParams }: PageProps<"/workers">) {
       />
       <section className="section-y" aria-label="Directory">
         <div className="container-page">
+          <p className="mb-6 text-sm text-ink-muted">
+            Prefer to describe the job in your own words?{" "}
+            <Link href="/assistant" className="font-semibold text-brand-700 underline">
+              Ask the AI assistant
+            </Link>
+            .
+          </p>
           <Suspense fallback={<Fallback />}>
             <Directory searchParams={searchParams} />
           </Suspense>

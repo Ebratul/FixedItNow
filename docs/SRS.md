@@ -438,6 +438,8 @@ service; do not accept arbitrary client-provided status changes.
 -   **FR-REV-07 (P0):** Label AI-generated sentiment as an estimate and
     keep a path for human review.
 
+> **Implementation status (Step 9):** FR-REV-01..05 and FR-REV-07's human-review path are implemented ([COMMUNITY.md](COMMUNITY.md)). FR-REV-06/07 sentiment analysis is **not** implemented (deliberate: privacy and evaluation reasons are in COMMUNITY.md); no AI-generated sentiment is shown anywhere.
+
 ### 4.11 Community and feature proposals
 
 -   **FR-COMM-01 (P1):** Signed-in users can create community posts,
@@ -453,6 +455,8 @@ service; do not accept arbitrary client-provided status changes.
     moderation reasons/actions.
 -   **FR-COMM-06 (P0):** Community content is untrusted input and must
     not be treated as privileged instructions by the AI system.
+
+> **Implementation status (Step 9):** FR-COMM-01..06 are implemented. The community is a signed-in space ("Public/auth policy" in §9.8 resolved as: reviews public, community and proposals signed-in). The vote threshold (10) only adds a proposal to the admin "needs review" filter. There is no separate moderator role; `ADMIN` moderates.
 
 ### 4.12 Admin and operations
 
@@ -1674,6 +1678,8 @@ Examples (must be protected by specific server-side permissions):
 
 Admin route names may be refined during implementation, but the
 authorization model and audit requirements must remain.
+
+> **As implemented (Step 9):** `POST /bookings/:id/review` (plus `GET/PUT/DELETE` on the same path), `GET /workers/:slug/reviews`, `POST /reviews/:id/report`, `/community/posts*`, `/community/comments/:id`, `/community/reports`, `/feature-proposals*`, and admin `GET /admin/reports`, `POST /admin/reports/:id/decision`, `GET/POST /admin/proposals*`, `POST /admin/moderation/:type/:id/visibility`, `GET /admin/moderation/overview|history`. Reactions are `POST .../reactions` and `DELETE .../reactions/:type`. See [API.md](API.md).
 
 ### 9.10 AI endpoints
 
