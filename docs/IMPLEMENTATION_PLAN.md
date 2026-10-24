@@ -106,4 +106,33 @@ See [SECURITY.md](SECURITY.md) "Not done / known limitations".
   login return, persistence after refresh, list, unfavorite), mobile filter toggle; axe + overflow sweep of 11 pages x 5 widths.
 - Query timing against a 20,000-profile scratch database (see DEPLOYMENT.md).
 
-## Step 5: next (not started)
+
+## Step 5: Bookings, availability, quotes, cancellation, rescheduling, disputes — implemented
+
+Design and rules: [BOOKINGS.md](BOOKINGS.md). Routes (web): `/workers/[slug]/book`, `/bookings`, `/bookings/[id]`, `/account/availability`.
+
+| Capability | Status |
+| --- | --- |
+| Booking request (server-validated, price snapshot, idempotent) | **Implemented and verified** |
+| Booking state machine, history/audit events, per-viewer allowed actions | **Implemented and verified** |
+| Worker availability (weekly hours, time off), public slot list | **Implemented and verified** |
+| Conflict prevention (lock + conditional update + DB exclusion constraint) incl. parallel tests | **Implemented and verified** |
+| Quotes (create/revise/withdraw/accept/reject/expire) | **Implemented and verified** |
+| Fixed/hourly accept; start/complete/confirm-completion | **Implemented and verified** |
+| Cancellation (policy, reasons, slot release, payment-review marker) | **Implemented and verified** |
+| Rescheduling (request/approve/reject/withdraw/expire) | **Implemented and verified** |
+| Disputes (open, messages, withdraw, admin review/resolve/reject, audit) | **Implemented and verified** (admin: API only) |
+| Customer/worker UI (form, list, detail, availability editor) | **Implemented and verified** (real Chrome, 375-1440 px, axe) |
+| Admin disputes UI | **Not implemented** (no admin dashboard exists yet) |
+| Notifications | **Not implemented** (no notification system; events stored) |
+| Dispute evidence uploads | **Not implemented** (no private storage) |
+| Scheduled expiry / auto-completion | **Not implemented** (lazy expiry only) |
+| Payments, refunds | **Not started** (Step 6) |
+
+### Verification performed
+- Backend: typecheck, lint, 67 unit tests, 331 integration tests (real PostgreSQL), build, `npm audit` (0), migrations applied to an empty database and to a populated one, `prisma migrate diff` shows no drift.
+- Mutation checks: disabling the participant check or the overlap protection makes the suites fail.
+- Frontend: lint, typecheck, 109 tests, build, `npm audit` (0).
+- Real Chrome: login redirect, request, accept, reschedule, quote, cancel (reason required), job start/finish/confirm, dispute + admin resolution, availability editor, no-hours worker, stranger access; overflow + axe sweeps at 375/430/768/1366/1440 px.
+
+## Step 6: next (not started)

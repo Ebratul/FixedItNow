@@ -5,6 +5,8 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly fieldErrors: FieldErrors = {},
+    /** Stable machine-readable code from the backend (e.g. SLOT_UNAVAILABLE). */
+    public readonly code?: string,
   ) {
     super(message);
   }
@@ -33,7 +35,7 @@ export async function api<T>(
 
   if (response.ok) return (await response.json()) as T;
 
-  let body: { message?: unknown; errors?: { path: string; message: string }[] } = {};
+  let body: { message?: unknown; code?: unknown; errors?: { path: string; message: string }[] } = {};
   try {
     body = await response.json();
   } catch {
@@ -43,11 +45,18 @@ export async function api<T>(
   for (const error of body.errors ?? []) {
     if (error.path && !(error.path in fieldErrors)) fieldErrors[error.path] = error.message;
   }
-  throw new ApiError(response.status, messageFor(response.status, body.message), fieldErrors);
+  throw new ApiError(
+    response.status,
+    messageFor(response.status, body.message),
+    fieldErrors,
+    typeof body.code === "string" ? body.code : undefined,
+  );
 }
 
 function messageFor(status: number, serverMessage: unknown) {
   if (status === 401) return "Please log in to continue.";
+  // Business-rule errors (409/422) carry a user-safe message from the backend.
+  if ((status === 409 || status === 422) && typeof serverMessage === "string") return serverMessage;
   if (status === 403) return "You don't have permission to do that.";
   if (status === 429) return "Too many requests. Please wait a moment and try again.";
   if (status >= 500) return "Something went wrong on our side. Please try again.";

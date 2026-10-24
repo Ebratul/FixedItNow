@@ -105,6 +105,14 @@ and filtered queries returned in roughly 5-20 ms; free-text search in roughly 40
 substring scan over the published set). Before the directory grows well beyond ~100k profiles, add a
 `pg_trgm` GIN index or a `tsvector` column (raw-SQL migration) for the text columns.
 
+## Step 5 database requirements
+
+`backend/prisma/migrations/20261025000000_step5_bookings` is **additive** (new tables and enums only; no existing table is altered or dropped) and
+runs `CREATE EXTENSION IF NOT EXISTS btree_gist;` (required by the double-booking exclusion constraint). `btree_gist` is a *trusted* extension on
+PostgreSQL 13+, so the database owner can create it; on managed databases (Neon, Supabase, RDS...) it is normally available, but **check before
+deploying**. Review the SQL, back up, then `npx prisma migrate deploy`. Bookings are interpreted in Asia/Dhaka; the server clock must be correct (UTC).
+There are no new environment variables.
+
 ## Migrations
 
 `backend/prisma/migrations/20261024000000_step4_discovery` (additive): adds nullable columns

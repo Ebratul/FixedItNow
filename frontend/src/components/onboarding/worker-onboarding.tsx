@@ -101,7 +101,7 @@ function PublicationCard({ profile, onChanged }: { profile: WorkerProfile; onCha
       <h3 className="font-bold">Public listing</h3>
       <p className="mt-1 text-sm text-ink-muted">
         {published
-          ? "Your profile is public. Customers can find it in search and save it to their favorites."
+          ? "Your profile is public. Customers can find it in search and save it to their favorites. They can only request bookings once you have set working hours."
           : "Your profile is approved but not public. Publish it to appear in search."}
       </p>
       {error && <Alert tone="error" className="mt-3">{error}</Alert>}
@@ -163,6 +163,11 @@ function StatusView({
           <Button onClick={onEdit} variant={canResubmit ? "primary" : "secondary"}>
             {canResubmit ? "Edit and resubmit" : "Edit details"}
           </Button>
+          {profile.verificationStatus === "VERIFIED" && (
+            <LinkButton href="/account/availability" variant="secondary">
+              Set working hours
+            </LinkButton>
+          )}
           <LinkButton href="/account" variant="ghost">
             Back to account
           </LinkButton>

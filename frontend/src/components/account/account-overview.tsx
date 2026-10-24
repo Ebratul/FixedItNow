@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, Heart, KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Heart, KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/account/auth-gate";
 import { VerificationBadge } from "@/components/account/worker-status";
@@ -100,6 +100,19 @@ function Overview({ me }: { me: Me }) {
           </ul>
         </Card>
       </div>
+
+      <Card className="mt-5 flex flex-wrap items-center justify-between gap-4 p-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <CalendarDays className="size-5 text-brand-600" aria-hidden /> Bookings
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">Requests, quotes, and appointments.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <LinkButton href="/bookings" variant="secondary" size="sm">My bookings</LinkButton>
+          {me.worker.started && <LinkButton href="/account/availability" variant="secondary" size="sm">Set availability</LinkButton>}
+        </div>
+      </Card>
 
       <Card className="mt-5 flex items-center justify-between gap-4 p-6">
         <div>

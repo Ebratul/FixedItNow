@@ -6,7 +6,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { LinkButton } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WorkerProfileView } from "@/components/workers/worker-profile-view";
-import { getWorker } from "@/lib/discovery";
+import { getAcceptingBookings, getWorker } from "@/lib/discovery";
 
 export async function generateMetadata({ params }: PageProps<"/workers/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -58,7 +58,7 @@ async function Profile({ params }: Pick<PageProps<"/workers/[slug]">, "params">)
         ]}
       />
       <div className="mt-6">
-        <WorkerProfileView worker={worker} />
+        <WorkerProfileView worker={worker} acceptingBookings={await getAcceptingBookings(worker.slug)} />
       </div>
     </div>
   );

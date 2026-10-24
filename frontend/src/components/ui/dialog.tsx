@@ -14,12 +14,15 @@ export function Dialog({
   onClose,
   title,
   className,
+  variant = "sheet",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   className?: string;
+  /** "sheet": full-width panel from the top (mobile menu). "modal": centred card. */
+  variant?: "sheet" | "modal";
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -41,7 +44,10 @@ export function Dialog({
         if (event.target === ref.current) onClose();
       }}
       className={cn(
-        "m-0 max-h-dvh w-full max-w-none bg-canvas p-0 text-ink backdrop:backdrop-blur-[1px] open:animate-fade-up",
+        "bg-canvas p-0 text-ink backdrop:backdrop-blur-[1px] open:animate-fade-up",
+        variant === "sheet"
+          ? "m-0 max-h-dvh w-full max-w-none"
+          : "m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-panel border border-line shadow-pop",
         className,
       )}
     >

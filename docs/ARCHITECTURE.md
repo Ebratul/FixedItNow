@@ -66,6 +66,21 @@ Browser --(same origin)--> Next.js web app (:3000)
 - Unknown/hidden profile and category pages render the not-found UI with `noindex`; because content is streamed
   (Cache Components), the HTTP status of that response is `200` (soft 404), not `404`.
 
+## Bookings (Step 5)
+Details: [BOOKINGS.md](BOOKINGS.md). Summary of the architecture:
+- **Module:** `backend/src/bookings/` (`BookingCore` = loading, lazy expiry, state transitions, events, presentation; `BookingsService`, `QuotesService`,
+  `RescheduleService`, `DisputesService`, `AvailabilityService`; controllers for bookings, availability and admin disputes). A `Clock` provider is injected so
+  tests control time.
+- **One state machine** (`booking.state.ts`) is the only place statuses change; there is no endpoint that takes a status. Each transition is a conditional UPDATE
+  (`WHERE status = <read status>`) plus an event row in the same transaction.
+- **Concurrency:** per-worker row lock (`SELECT ... FOR UPDATE`) in every confirm/reschedule/time-off transaction, **and** a PostgreSQL exclusion constraint
+  (`booking_no_overlap`, needs `btree_gist`) as the final guard. A per-(customer, worker) advisory lock plus an optional `Idempotency-Key` guard duplicate requests.
+- **Database-level invariants** (in the migration SQL, since Prisma cannot model them): exclusion constraint, one pending quote / reschedule request per booking
+  (partial unique indexes), `quote.total = labor + materials + other`, time-order and availability-bound CHECKs.
+- **Frontend:** `/workers/[slug]/book` (3-step form with real slots), `/bookings`, `/bookings/[id]` (renders buttons **only** from the server's `actions` list),
+  `/account/availability`. The profile page offers "Request a booking" only when the professional has published working hours.
+- **No notification system exists**: lifecycle events are stored in `booking_event` (the future outbox). Nothing is emailed.
+
 ## Account linking
 Google never auto-links to an existing email account (see SECURITY.md). Linking is explicit
 (`linkSocial`) for a signed-in user.

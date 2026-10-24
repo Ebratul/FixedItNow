@@ -38,3 +38,13 @@ export const getWorker = cache(async (slug: string) => {
     throw error;
   }
 });
+
+/** Does this professional currently accept booking requests (have working hours)? */
+export const getAcceptingBookings = cache(async (slug: string) => {
+  try {
+    const result = await serverApi<{ acceptingBookings: boolean }>(`/workers/${encodeURIComponent(slug)}/availability?days=1`);
+    return result.acceptingBookings;
+  } catch {
+    return false;
+  }
+});

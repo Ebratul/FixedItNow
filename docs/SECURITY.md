@@ -46,6 +46,29 @@ Known limitations (Step 4): edits to a **published** profile go live immediately
 is suspend-after-the-fact); no profile photos (initials avatar only, no upload endpoint); `VERIFIED` still
 means "admin reviewed the profile", not an identity check.
 
+## Bookings, availability and disputes (Step 5)
+
+| Risk | Control |
+| --- | --- |
+| IDOR / BOLA | Every booking route loads the booking and checks the caller is its **customer or assigned worker**; strangers, other workers, admins (outside disputes) and unknown ids all get the same `404`. Quote and reschedule ids are always looked up *within* the booking in the URL. Tested for each endpoint family. |
+| Role confusion | Role-specific actions check the viewer role (`403 NOT_ALLOWED`) and the state machine's role table (`409`); the UI only renders what `actions` allows. |
+| Mass assignment | Strict Zod schemas on every body: `status`, `customerId`, prices, totals, `isAdmin`, evidence fields -> `400`. No endpoint takes a status. |
+| Price tampering | Prices come from the worker's stored service (snapshotted) or the stored quote; the quote total is computed server-side and also CHECK-constrained; `expectedTotalBdt` can only make a request *fail*. |
+| Races / double booking | Worker row lock + conditional updates + DB exclusion constraint; tested with parallel accepts, quote accepts, reschedules and a raw-SQL attempt. |
+| Duplicate submissions | `Idempotency-Key` replay, advisory lock + overlap check, 20 open-request cap, 10/min creation throttle. |
+| State abuse | Illegal transitions -> `409 INVALID_TRANSITION`; double cancel yields one event; a disputed booking can only be changed by the dispute workflow. |
+| Privacy | Street address hidden from the worker until confirmation; no emails/ids in any booking payload (tested); internal dispute notes never returned to participants; admin dispute view has names but no emails. |
+| Admin | `RequireAdmin` (role read from DB every request); admin actions are audit-logged; an admin cannot moderate a dispute they are party to; no admin booking list outside disputes. |
+| Injection / XSS | Prisma API (the only raw SQL are parameterised lock/advisory-lock statements with no user text); descriptions and messages stored verbatim and rendered as React text (tested); 100 KB body limit (`413`). |
+| Abuse | Per-route throttles (bookings 10/min, disputes 5/min, cancel/quote/reschedule/messages 20/min). |
+
+Findings in Step 5: Prisma cannot deserialise `pg_advisory_xact_lock`'s `void` result via `$queryRaw` (fixed with `$executeRaw`); the first draft of a
+test suite showed that a new request for an already-confirmed slot is (correctly) refused up front, so competing requests must be created *before* the first
+confirmation; a newly published `multer` advisory (transitive dependency of NestJS, unused because there are no uploads) was fixed with an `overrides` pin.
+
+Known limitations (Step 5): disputes are text-only (no evidence upload); no refund/payout outcomes; no notifications; expiry is lazy (no scheduler); a
+reviewer cannot yet see a general booking list; cancellation has no fee/refund policy (a product decision); customer-written text is not moderated.
+
 ## Account-linking policy
 
 Google sign-in **never** auto-merges into an existing account because the email

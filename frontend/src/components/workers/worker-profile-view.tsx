@@ -2,7 +2,7 @@ import { BadgeCheck, CalendarClock, Clock, Languages, MapPin, ShieldCheck, Star 
 import { FavoriteButton } from "@/components/professional/favorite-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Price } from "@/components/ui/price";
 import { Rating } from "@/components/ui/rating";
@@ -14,7 +14,7 @@ const PRICING_LABELS = { FIXED: "Fixed price", HOURLY: "Per hour", QUOTE: "Quote
  * Public profile. All worker-provided text is rendered as plain React text
  * (escaped); there are no links, HTML, or images from user input.
  */
-export function WorkerProfileView({ worker }: { worker: WorkerProfileData }) {
+export function WorkerProfileView({ worker, acceptingBookings = false }: { worker: WorkerProfileData; acceptingBookings?: boolean }) {
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
       <div className="space-y-8">
@@ -107,12 +107,25 @@ export function WorkerProfileView({ worker }: { worker: WorkerProfileData }) {
             {worker.startingPriceBdt !== null ? <Price amount={worker.startingPriceBdt} /> : "On request"}
           </p>
           <div className="mt-5 space-y-3">
-            <Button disabled className="w-full" size="lg" aria-describedby="booking-note">
-              <CalendarClock className="size-5" aria-hidden /> Booking not available yet
-            </Button>
-            <p id="booking-note" className="text-sm text-ink-subtle">
-              Booking requests are coming in a later release. You can save this professional in the meantime.
-            </p>
+            {acceptingBookings ? (
+              <>
+                <LinkButton href={`/workers/${worker.slug}/book`} className="w-full" size="lg" variant="accent">
+                  <CalendarClock className="size-5" aria-hidden /> Request a booking
+                </LinkButton>
+                <p className="text-sm text-ink-subtle">
+                  You choose a time and send a request. {worker.displayName} confirms it, so nothing is reserved or charged until then.
+                </p>
+              </>
+            ) : (
+              <>
+                <Button disabled className="w-full" size="lg" aria-describedby="booking-note">
+                  <CalendarClock className="size-5" aria-hidden /> Not taking requests yet
+                </Button>
+                <p id="booking-note" className="text-sm text-ink-subtle">
+                  This professional has not published working hours yet, so booking requests are closed. You can save them for later.
+                </p>
+              </>
+            )}
             <FavoriteButton workerId={worker.id} workerName={worker.displayName} showLabel className="w-full [&>button]:w-full" />
           </div>
         </Card>

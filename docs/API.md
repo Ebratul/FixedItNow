@@ -114,3 +114,50 @@ Hidden, unpublished, suspended, draft, malformed and unknown slugs all return th
 | `GET /admin/workers` | Rows now include `published` and `suspended`. |
 
 There are **no** category create/update/delete endpoints (categories are seed/migration managed).
+
+## Bookings (Step 5)
+
+Full behaviour and rules: [BOOKINGS.md](BOOKINGS.md). All routes need a session; unsafe methods need the web `Origin`.
+Access to a booking is limited to its **customer** and **assigned worker**: anyone else (and unknown ids) gets the same `404`.
+Business-rule errors carry a stable `code` next to the message: `409` = wrong state / lost a race (e.g. `SLOT_UNAVAILABLE`,
+`STALE_BOOKING`, `INVALID_TRANSITION`, `QUOTE_EXPIRED`, `QUOTE_NOT_PENDING`, `QUOTE_CHANGED`, `DUPLICATE_REQUEST`, `DISPUTE_EXISTS`),
+`422` = well-formed but breaks a rule (`OUTSIDE_AVAILABILITY`, `TOO_SOON`, `TOO_FAR_AHEAD`, `MISALIGNED_TIME`, `TIME_OFF`, `AREA_NOT_SERVED`,
+`SERVICE_NOT_OFFERED`, `WORKER_UNAVAILABLE`, `REASON_REQUIRED`, `TOO_EARLY`), `403` = right booking, wrong role (`NOT_ALLOWED`).
+
+| Method & path | Who | Body / notes |
+| --- | --- | --- |
+| `POST /bookings` | any signed-in user | `{ workerId, categorySlug, description 10-1000, serviceArea, serviceAddress 5-300, startAt (ISO with offset), durationMinutes }`. Optional `Idempotency-Key` header (8-64 `[A-Za-z0-9_-]`): replay -> `200` with the same booking; reuse for a different payload -> `409`. `201` on creation. 10/min. Cannot book yourself. |
+| `GET /bookings?role=customer\|worker&group=all\|open\|active\|history\|disputed&page&pageSize<=50` | caller | Only the caller's bookings for that side. Unanswered requests past their start show as `EXPIRED`. |
+| `GET /bookings/:id` | participant | Detail: `booking`, **`actions`** (what the viewer may do now), `quotes`, `rescheduleRequests`, `dispute`, `events`. Applies lazy expiry. |
+| `GET /bookings/:id/history` | participant | Events (roles, no user ids). |
+| `POST /bookings/:id/accept` | assigned worker | Fixed/hourly requests only. |
+| `POST /bookings/:id/decline` | assigned worker | `{ reason? }` |
+| `POST /bookings/:id/cancel` | participant | `{ reason? }`; reason required for confirmed bookings. |
+| `POST /bookings/:id/start`, `/complete` | assigned worker | |
+| `POST /bookings/:id/confirm-completion` | booking's customer | |
+| `POST /bookings/:id/quotes` | assigned worker | `{ laborBdt, materialsBdt?, otherBdt?, description, terms?, estimatedDurationMinutes?, validForHours? }`; `totalBdt` is rejected. |
+| `POST /bookings/:id/quotes/:quoteId/accept` | booking's customer | `{ expectedTotalBdt? }` |
+| `POST /bookings/:id/quotes/:quoteId/reject` | booking's customer | `{ reason? }` |
+| `POST /bookings/:id/quotes/:quoteId/withdraw` | assigned worker | |
+| `POST /bookings/:id/reschedule` | participant | `{ newStartAt, reason? }` |
+| `POST /bookings/:id/reschedule/:requestId/accept\|reject\|withdraw` | the other party / requester | |
+| `POST /bookings/:id/disputes` | participant | `{ category, description 20-2000 }`; attachment fields rejected. 5/min. |
+| `GET /bookings/:id/dispute` | participant | Public messages only. |
+| `POST /bookings/:id/dispute/messages` | participant | `{ body 1-2000 }` |
+| `POST /bookings/:id/dispute/withdraw` | the opener | Restores the booking. |
+
+No endpoint accepts a booking status.
+
+### Availability
+| Method & path | Who | Notes |
+| --- | --- | --- |
+| `GET /workers/:slug/availability?from=YYYY-MM-DD&days<=14&duration` | Public | Bookable start times per Bangladesh day; `acceptingBookings=false` when no working hours. Hidden/unknown profiles: `404`. 60/min. |
+| `GET /me/availability`, `PUT /me/availability` | the worker | `{ rules: [{ weekday 0-6 (0=Sunday), startMinute, endMinute }] }` replaces the schedule (30-min multiples, no overlaps, <= 28 windows). Always the session's own profile. |
+| `POST /me/time-off`, `DELETE /me/time-off/:id` | the worker | `{ startAt, endAt, note? }`; `409` if it overlaps a confirmed booking. |
+
+### Admin disputes (admin only)
+`GET /admin/disputes?status&page`, `GET /admin/disputes/:id`, `POST /admin/disputes/:id/review`, `.../request-info {message}`,
+`.../messages {body, internal?}`, `.../resolve {outcome: MARK_COMPLETED|CANCEL_BOOKING|RESTORE_BOOKING, resolution}`, `.../reject {resolution}`.
+Invalid transitions -> `409 INVALID_DISPUTE_TRANSITION`; an admin who is party to the booking -> `403`.
+
+`GET /workers/:slug` now needs no change; the web profile page calls the availability endpoint to decide whether to offer "Request a booking".
