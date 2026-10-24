@@ -81,6 +81,16 @@ Details: [BOOKINGS.md](BOOKINGS.md). Summary of the architecture:
   `/account/availability`. The profile page offers "Request a booking" only when the professional has published working hours.
 - **No notification system exists**: lifecycle events are stored in `booking_event` (the future outbox). Nothing is emailed.
 
+## Payments (Step 6)
+Details: [PAYMENTS.md](PAYMENTS.md). Summary:
+- **Module:** `backend/src/payments/` (`PaymentsService`, `PaymentCallbacksService`, `RefundsService`, three controllers, provider adapters under `providers/`). It does not import the bookings module;
+  booking detail uses the pure `paymentSummary()` query. Payment never changes a booking's status.
+- **Provider boundary:** adapters (`BkashAdapter`, `SslcommerzAdapter`) implement `PaymentProviderAdapter`: protocol only, no database, neutral results. One injectable `HttpClient` is the only network access (a fake replaces it in tests).
+- **One verification path:** every callback, poll and admin reconcile ends in `PaymentsService.applyVerification`, a single transaction (booking lock -> payment lock) that compares the provider's report with the stored attempt.
+- **Ledger:** `payment_event` (append-only trigger, `dedupeKey` uniqueness). Money is integer BDT; provider decimals are parsed exactly (`money.ts`).
+- **CSRF:** the global Origin guard now honours `@SkipOriginCheck()`, used only by the provider callback controller.
+- **Frontend:** `/bookings/[id]/pay` (checkout), `/payments` (history), `/payments/[reference]` (the return page: it asks the server and polls; a URL parameter is never read as status).
+
 ## Account linking
 Google never auto-links to an existing email account (see SECURITY.md). Linking is explicit
 (`linkSocial`) for a signed-in user.

@@ -110,6 +110,7 @@ function Overview({ me }: { me: Me }) {
         </div>
         <div className="flex flex-wrap gap-3">
           <LinkButton href="/bookings" variant="secondary" size="sm">My bookings</LinkButton>
+          <LinkButton href="/payments" variant="secondary" size="sm">Payments</LinkButton>
           {me.worker.started && <LinkButton href="/account/availability" variant="secondary" size="sm">Set availability</LinkButton>}
         </div>
       </Card>

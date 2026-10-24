@@ -19,14 +19,17 @@ export class ApiError extends Error {
  */
 export async function api<T>(
   path: string,
-  init: { method?: "GET" | "PUT" | "POST" | "DELETE"; body?: unknown } = {},
+  init: { method?: "GET" | "PUT" | "POST" | "DELETE"; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api/v1${path}`, {
       method: init.method ?? "GET",
       credentials: "same-origin",
-      headers: init.body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers:
+        init.body === undefined && !init.headers
+          ? undefined
+          : { ...(init.body === undefined ? {} : { "Content-Type": "application/json" }), ...init.headers },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
   } catch {

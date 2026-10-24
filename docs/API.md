@@ -161,3 +161,44 @@ No endpoint accepts a booking status.
 Invalid transitions -> `409 INVALID_DISPUTE_TRANSITION`; an admin who is party to the booking -> `403`.
 
 `GET /workers/:slug` now needs no change; the web profile page calls the availability endpoint to decide whether to offer "Request a booking".
+
+## Payments (Step 6)
+
+Design, state machines and the provider flows: [PAYMENTS.md](PAYMENTS.md). All paths are under `/api/v1`. References look like `FIN` + 24 hex characters; a malformed or foreign reference is the same `404`.
+
+### Customer (session required; the payer is always the session user)
+| Method & path | Who | Notes |
+| --- | --- | --- |
+| `GET /payments/providers` | any signed-in user | `[{ provider, label, available, mode: "sandbox"\|"live"\|null, minAmountBdt, maxAmountBdt }]`. `available:false` = not configured. No credentials. |
+| `POST /bookings/:id/payments` | the booking's customer | Body `{ provider: "BKASH"\|"SSLCOMMERZ" }` **only** (strict: `amount`, `currency`, `status`, ids -> `400`). Optional `Idempotency-Key`. `201 { payment, checkoutUrl }` (`200` on replay). Errors: `404` (not yours), `409 ALREADY_PAID \| PAYMENT_IN_PROGRESS \| PAYMENT_UNDER_REVIEW \| IDEMPOTENCY_KEY_REUSED`, `422 BOOKING_NOT_PAYABLE \| NO_AGREED_AMOUNT \| AMOUNT_OUT_OF_RANGE \| PROVIDER_UNAVAILABLE \| TOO_MANY_ATTEMPTS \| UNSUPPORTED_CURRENCY`, `502 PROVIDER_ERROR` (nothing charged). 10/min. |
+| `GET /payments?page&pageSize` | the payer | Own payments, newest first. |
+| `GET /payments/:reference` | the payer | **The authoritative status.** Re-verifies with the provider first if the attempt is unresolved (throttled). Returns status, amount, refunds and a history of customer-visible events. |
+| `POST /payments/:reference/refunds` | the payer | `{ reason 10-500, amountBdt? }` (strict). Verified payment + `CANCELLED` booking only. `409 REFUND_IN_PROGRESS`, `422 REFUND_NOT_ELIGIBLE \| PAYMENT_NOT_REFUNDABLE \| REFUND_EXCEEDS_REMAINING`. Optional `Idempotency-Key`. 5/min. A request moves no money. |
+| `GET /bookings/:id` | participant | Now includes `payment` (customer: state, `canPay`, attempts; professional: only `{ state: UNPAID\|PAID\|REFUNDED }`). |
+
+The payment object never contains credentials, provider session ids, the checkout URL (except in the initiation response), database ids or raw provider data. `providerTransactionId` (the receipt number) appears only after verification.
+
+### Provider callbacks (public: no session, no Origin check; every field is untrusted)
+| Method & path | Caller | Behaviour |
+| --- | --- | --- |
+| `GET /payments/callbacks/bkash/:reference?paymentID&status&signature` | customer's browser from bKash | Executes (once) and verifies with bKash; `303` to `FRONTEND_ORIGIN/payments/<reference>?returned=1`. |
+| `POST /payments/callbacks/sslcommerz/{success\|fail\|cancel}` (form) | customer's browser from SSLCOMMERZ | Validates with the Order Validation API; `303` to the same return page. Other `:kind` -> `404`. |
+| `POST /payments/ipn/sslcommerz` (form) | SSLCOMMERZ server | Same verification; always `200 OK` (plain text); `500` only on a transient internal error so the provider retries. |
+
+Unknown or malformed references redirect to `FRONTEND_ORIGIN/payments` without error. Register `https://<public-origin>/api/v1/payments/ipn/sslcommerz` as the store's IPN URL; the other URLs are sent per payment.
+
+### Admin (admin only; an admin cannot act on a booking they take part in)
+| Method & path | Notes |
+| --- | --- |
+| `GET /admin/payments?status=&page` | `status` may be a payment status or `NEEDS_ATTENTION` (review items + paid-but-booking-ineligible). No emails or internal ids. |
+| `GET /admin/payments/:reference` | Detail with the full sanitised event trail and refunds. |
+| `POST /admin/payments/:reference/reconcile` | Re-verify with the provider (10/min, audit-logged, idempotent). |
+| `POST /admin/payments/reconcile-stale` | Re-verify up to 20 stale unresolved payments (2/min). |
+| `POST /admin/payments/:reference/refunds` | `{ reason, amountBdt? }`; creates an already-`APPROVED` refund for a verified payment or verified duplicate. |
+| `GET /admin/refunds?status=&page`, `GET /admin/refunds/:id` | |
+| `POST /admin/refunds/:id/approve` | `{ amountBdt?, note? }` - a decision only. |
+| `POST /admin/refunds/:id/reject` | `{ note }` |
+| `POST /admin/refunds/:id/process` | Calls the provider's refund API (only if enabled), then verifies via the refund-status API. `422 REFUNDS_NOT_SUPPORTED` otherwise. |
+| `POST /admin/refunds/:id/reconcile` | Re-query a `PROCESSING` refund. |
+
+No endpoint accepts a payment or refund status, an amount for a payment, a provider reference or a refunded total.

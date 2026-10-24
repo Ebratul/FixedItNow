@@ -2,7 +2,7 @@
 
 This document is the single description of how the booking domain works. The state machine lives in
 `backend/src/bookings/booking.state.ts` (bookings) and `dispute.state.ts` (disputes); everything below is
-what the code actually does. **No payments exist yet** (Step 6): nothing here moves, holds, or refunds money.
+what the code actually does. Bookings never move, hold or refund money by themselves: payment is a separate domain ([PAYMENTS.md](PAYMENTS.md), Step 6) that reads the agreed price and never changes a booking's lifecycle.
 
 ## Concepts and data
 
@@ -15,7 +15,7 @@ what the code actually does. **No payments exist yet** (Step 6): nothing here mo
 | `dispute`, `dispute_message` | One dispute per booking, text-only messages (some admin-internal). |
 | `worker_availability_rule`, `worker_time_off` | Weekly working windows and unavailable ranges. |
 
-* **Money:** whole BDT integers (same unit as worker prices). Step 6 must convert to the payment provider's decimal format.
+* **Money:** whole BDT integers (same unit as worker prices). The payment adapters convert to the provider's decimal format with integer arithmetic (`"500.00"`).
 * **Time zone:** instants are stored in UTC. Weekly hours are interpreted in **Asia/Dhaka (UTC+06:00, no daylight saving)**. All UI times are shown in Bangladesh time. A unit test guards the fixed-offset assumption.
 * **Grid:** appointments start/end on 30-minute marks; duration is 30-480 minutes in 30-minute steps.
 * A booking is **never** created or changed from a client-supplied customer id, price, role or status; unknown fields are rejected (`400`).
@@ -41,8 +41,7 @@ REQUESTED --quote--> QUOTED --accept quote--> CONFIRMED --start--> IN_PROGRESS -
                                                                                      DISPUTED --admin outcome / withdrawal--> COMPLETED | CANCELLED | previous status
 ```
 
-Deviations from the SRS sketch: no separate `ACCEPTED` (accepting confirms directly, because there is no payment gate yet; Step 6 may
-insert one), and `REJECTED` is named `DECLINED`.
+Deviations from the SRS sketch: no separate `ACCEPTED` (accepting confirms directly, because payment is not a gate: Step 6 kept it that way and lets the customer pay a confirmed booking), and `REJECTED` is named `DECLINED`.
 
 | Action | Who | From | To |
 | --- | --- | --- | --- |
@@ -92,7 +91,7 @@ Immediate and unilateral, recorded with actor, reason and time (`booking_event` 
 * **Worker:** only a `CONFIRMED` booking (reason required). Before confirmation they use **decline**.
 * **Nobody:** once the job has started (use a dispute), after completion, or when already closed. Repeated/parallel cancels produce exactly one event.
 * Cancelling releases the slot and closes pending quotes and reschedule requests.
-* **No fees, penalties or refunds are defined or implied.** A cancellation after confirmation records `paymentReviewRequired: true` in the event metadata, and `lateCancellation: true` when it is under 24 h before the start, as markers for Step 6. Open product decision: a real cancellation/refund policy.
+* **No fees, penalties or refunds are defined or implied.** A cancellation after confirmation records `paymentReviewRequired: true` in the event metadata, and `lateCancellation: true` when it is under 24 h before the start, as markers for reviewers. Step 6 adds a customer refund *request* for a cancelled, paid booking and an admin review; it still defines no fee, percentage or deadline. Open product decision: a real cancellation/refund policy.
 
 ## Rescheduling policy
 
@@ -116,4 +115,4 @@ Participants only; everyone else (strangers, other workers, admins on non-disput
 
 ## Not built in this step
 
-Notifications (no notification system exists; events are recorded for it), payments/refunds, evidence uploads, an admin dashboard UI (API only), automatic completion after N days, scheduled expiry, travel/preparation buffers, per-service durations, recurring bookings.
+Notifications (no notification system exists; events are recorded for it), evidence uploads, an admin dashboard UI (API only), automatic completion after N days, scheduled expiry, travel/preparation buffers, per-service durations, recurring bookings.

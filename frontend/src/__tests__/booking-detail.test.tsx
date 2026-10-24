@@ -26,6 +26,7 @@ const base = (over: Partial<BookingDetail["booking"]> = {}, rest: Partial<Bookin
     confirmedAt: null, completedAt: null, cancellation: null, createdAt: "2026-11-01T06:00:00.000Z", ...over,
   },
   actions: [], quotes: [], rescheduleRequests: [], dispute: null, events: [],
+  payment: { state: "UNPAID", canPay: false, amountBdt: 500, currency: "BDT", activeReference: null, payments: [] },
   ...rest,
 });
 
@@ -97,5 +98,41 @@ describe("BookingDetailView", () => {
     fireEvent.change(await screen.findByLabelText("Reason"), { target: { value: "Plans changed a lot" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Cancel booking" }).at(-1)!);
     expect(await screen.findByText("This booking just changed. Refresh the page and try again.")).toBeInTheDocument();
+  });
+
+  describe("payment section", () => {
+    it("offers Pay now only when the server says the customer can pay, and says 'paid' only for a verified payment", () => {
+      detail = base({}, { payment: { state: "UNPAID", canPay: true, amountBdt: 500, currency: "BDT", activeReference: null, payments: [] } });
+      const { unmount } = render(<BookingDetailView id="b1" />);
+      expect(screen.getByRole("link", { name: "Pay now" })).toHaveAttribute("href", "/bookings/b1/pay");
+      expect(screen.getAllByText(/not paid yet/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/paid and verified/)).not.toBeInTheDocument();
+      unmount();
+
+      detail = base({}, { payment: { state: "IN_PROGRESS", canPay: false, amountBdt: 500, currency: "BDT", activeReference: "FIN1", payments: [] } });
+      const second = render(<BookingDetailView id="b1" />);
+      expect(screen.queryByRole("link", { name: "Pay now" })).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Check payment status" })).toHaveAttribute("href", "/payments/FIN1");
+      second.unmount();
+
+      detail = base({}, { payment: { state: "PAID", canPay: false, amountBdt: 500, currency: "BDT", activeReference: null, payments: [] } });
+      render(<BookingDetailView id="b1" />);
+      expect(screen.getAllByText(/paid and verified/).length).toBeGreaterThan(0);
+    });
+
+    it("shows the professional only whether a verified payment exists, with no pay button", () => {
+      detail = base({ viewerRole: "WORKER", customer: { name: "Karim" } }, { payment: { state: "PAID" } });
+      render(<BookingDetailView id="b1" />);
+      expect(screen.getByText(/the customer's payment has been verified/)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Pay now" })).not.toBeInTheDocument();
+      expect(screen.queryByText("Payment")).not.toBeInTheDocument();
+    });
+
+    it("warns that cancelling a paid booking does not refund automatically", () => {
+      detail = base({}, { actions: ["cancel"], payment: { state: "PAID", canPay: false, amountBdt: 500, currency: "BDT", activeReference: null, payments: [] } });
+      render(<BookingDetailView id="b1" />);
+      fireEvent.click(screen.getByRole("button", { name: "Cancel booking" }));
+      expect(screen.getByText(/does NOT refund it automatically/)).toBeInTheDocument();
+    });
   });
 });

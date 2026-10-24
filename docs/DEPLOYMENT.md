@@ -61,6 +61,14 @@ because it truncates tables.
 | `TRUST_PROXY` | no | reverse-proxy hops for Express (default 1) |
 | `TRUSTED_PROXIES` | no | **required in production**; see below |
 | `RATE_LIMIT_ENABLED` | no | cannot be `false` in production |
+| `BKASH_BASE_URL` | no | bKash tokenized checkout v2 base URL; all five `BKASH_*` credentials or none. See [PAYMENTS.md](PAYMENTS.md) |
+| `BKASH_APP_KEY` / `BKASH_APP_SECRET` / `BKASH_USERNAME` / `BKASH_PASSWORD` | **yes** | bKash merchant credentials |
+| `BKASH_IS_LIVE` | no | default `false`; `true` only with `NODE_ENV=production` and a non-sandbox URL |
+| `BKASH_AUTH_SCHEME` | no | `bearer` (default) or `raw` (unverified; see PAYMENTS.md) |
+| `BKASH_REFUNDS_ENABLED` | no | default `false` |
+| `SSLCOMMERZ_STORE_ID` / `SSLCOMMERZ_STORE_PASSWORD` | id no / **password yes** | both or neither |
+| `SSLCOMMERZ_IS_LIVE` | no | default `false`; `true` only with `NODE_ENV=production` |
+| `SSLCOMMERZ_REFUNDS_ENABLED` | no | default `false` (needs SSLCOMMERZ IP whitelisting) |
 
 ### Frontend (`frontend/.env.local`)
 | Variable | Secret? | Notes |
@@ -97,6 +105,7 @@ for the sender domain. Until SMTP is configured, users cannot verify their email
 - Rate limiting for non-auth routes is per-instance memory; use Redis if you scale out.
 - Grant the first admin with `npm run admin:grant` from a trusted machine.
 - Serve the web app and API on the **same site** (same origin recommended).
+- Payments: leave every `*_IS_LIVE` at `false` until the sandbox checklist in [PAYMENTS.md](PAYMENTS.md) is done; `/api/v1/payments/callbacks/*` and `/api/v1/payments/ipn/sslcommerz` must be reachable by providers over https **without** a login wall or WAF challenge, while every other route stays protected; register the IPN URL in the SSLCOMMERZ panel; keep credentials in a secret manager, never in git.
 
 ## Search performance
 
@@ -112,6 +121,14 @@ runs `CREATE EXTENSION IF NOT EXISTS btree_gist;` (required by the double-bookin
 PostgreSQL 13+, so the database owner can create it; on managed databases (Neon, Supabase, RDS...) it is normally available, but **check before
 deploying**. Review the SQL, back up, then `npx prisma migrate deploy`. Bookings are interpreted in Asia/Dhaka; the server clock must be correct (UTC).
 There are no new environment variables.
+
+## Step 6 database requirements
+
+`backend/prisma/migrations/20261026000000_step6_payments` is **additive** (tables `payment`, `payment_event`, `refund`, three enums; no existing table is altered). Besides tables it creates
+CHECK constraints, three partial unique indexes and an append-only trigger (`payment_event_append_only`, a PL/pgSQL function) that rejects UPDATE/DELETE on `payment_event`:
+the database user running migrations must be allowed to create functions/triggers. No new extension is needed. Review the SQL, back up, then `npx prisma migrate deploy`.
+**Never** `migrate reset`/`dev` against a database holding payment records. It was applied only to disposable local databases; `prisma migrate diff` reports no drift.
+Because `payment_event` rows cannot be deleted, a test database is cleared with `TRUNCATE` (which the trigger does not intercept), never `DELETE`.
 
 ## Migrations
 

@@ -13,10 +13,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
-import type { BookingDetail, Quote, RescheduleRequest } from "@/lib/booking-types";
+import type { BookingDetail, BookingPayment, Quote, RescheduleRequest } from "@/lib/booking-types";
 import { EVENT_LABELS, formatBdt, formatDateTime, formatDuration, formatRange } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import { DisputeForm, DisputePanel } from "./dispute-panel";
+import { PaymentBadge } from "@/components/payments/payment-badge";
 import { QuoteCard, QuoteForm } from "./quote-panel";
 import { RescheduleCard, RescheduleForm } from "./reschedule-panel";
 import { StatusBadge } from "./status-badge";
@@ -33,6 +34,46 @@ function priceLine(d: BookingDetail["booking"]) {
   if (pricing.model === "FIXED" && pricing.unitPriceBdt !== null) return `${formatBdt(pricing.unitPriceBdt)} fixed price (once accepted)`;
   if (pricing.model === "HOURLY" && pricing.unitPriceBdt !== null) return `${formatBdt(pricing.unitPriceBdt)} per hour · about ${formatBdt(Math.round((pricing.unitPriceBdt * durationMinutes) / 60))} (once accepted)`;
   return "To be quoted by the professional";
+}
+
+/** Short, honest payment wording for the price row. Only a server-verified payment says "paid". */
+function paymentLine(payment: BookingPayment, viewer: "CUSTOMER" | "WORKER") {
+  switch (payment.state) {
+    case "PAID": return viewer === "CUSTOMER" ? "paid and verified" : "the customer's payment has been verified";
+    case "PARTIALLY_REFUNDED": return "paid; part refunded";
+    case "REFUNDED": return "refunded";
+    case "IN_PROGRESS": return "payment in progress";
+    case "UNDER_REVIEW": return "payment under review";
+    default: return "not paid yet";
+  }
+}
+
+function PaymentCard({ detail }: { detail: BookingDetail }) {
+  const { booking, payment } = detail;
+  if (!("canPay" in payment)) return null;
+  const latest = payment.payments[0];
+  return (
+    <section aria-labelledby="payment-heading">
+      <h2 id="payment-heading" className="text-h2 font-extrabold">Payment</h2>
+      <Card className="mt-4 flex flex-wrap items-center justify-between gap-4 p-5">
+        <div>
+          <p className="font-semibold">
+            {payment.amountBdt !== null ? formatBdt(payment.amountBdt) : "No price agreed yet"}
+            {" "}<span className="font-normal text-ink-muted">· {paymentLine(payment, "CUSTOMER")}</span>
+          </p>
+          {latest && <p className="mt-1 flex items-center gap-2 text-sm text-ink-muted">Latest attempt: <PaymentBadge payment={latest} /></p>}
+          {payment.state === "UNPAID" && !payment.canPay && booking.status !== "CANCELLED" && (
+            <p className="mt-1 text-sm text-ink-subtle">You can pay once the professional has confirmed the booking.</p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {payment.canPay && <LinkButton href={`/bookings/${booking.id}/pay`} variant="accent">Pay now</LinkButton>}
+          {payment.activeReference && <LinkButton href={`/payments/${payment.activeReference}`} variant="secondary">Check payment status</LinkButton>}
+          {!payment.activeReference && latest && <LinkButton href={`/payments/${latest.reference}`} variant="secondary">Payment details</LinkButton>}
+        </div>
+      </Card>
+    </section>
+  );
 }
 
 function View({ initial }: { initial: BookingDetail }) {
@@ -105,13 +146,15 @@ function View({ initial }: { initial: BookingDetail }) {
           <dt className="font-semibold text-ink-muted">Details</dt>
           <dd className="whitespace-pre-line">{booking.description}</dd>
           <dt className="font-semibold text-ink-muted">Price</dt>
-          <dd>{priceLine(booking)} <span className="text-ink-subtle">· no payment is taken yet</span></dd>
+          <dd>{priceLine(booking)} {booking.pricing.agreedAmountBdt !== null && <span className="text-ink-subtle">· {paymentLine(detail.payment, viewer)}</span>}</dd>
           {booking.cancellation && (<><dt className="font-semibold text-ink-muted">Cancelled</dt><dd>{formatDateTime(booking.cancellation.at)}{booking.cancellation.by ? ` by ${booking.cancellation.by === "CUSTOMER" ? "the customer" : booking.cancellation.by === "WORKER" ? "the professional" : "a reviewer"}` : ""}{booking.cancellation.reason ? `: “${booking.cancellation.reason}”` : ""}</dd></>)}
         </dl>
         {booking.worker.slug && viewer === "CUSTOMER" && (
           <p className="mt-4 text-sm"><Link href={`/workers/${booking.worker.slug}`} className="font-semibold text-brand-700 hover:underline">View {booking.worker.displayName}&apos;s profile</Link></p>
         )}
       </Card>
+
+      {viewer === "CUSTOMER" && <PaymentCard detail={detail} />}
 
       {actions.length > 0 && (
         <section aria-labelledby="actions-heading">
@@ -192,6 +235,14 @@ function View({ initial }: { initial: BookingDetail }) {
   );
 }
 
+function cancelPaymentNote({ payment }: BookingDetail) {
+  if (payment.state === "PAID" || payment.state === "PARTIALLY_REFUNDED") {
+    return "This booking has been paid. Cancelling does NOT refund it automatically: afterwards the customer can ask for a refund, and our team reviews it.";
+  }
+  if (payment.state === "IN_PROGRESS") return "A payment is in progress. If it completes after you cancel, it will still be recorded and can be refunded on request.";
+  return "Nothing has been charged for this booking.";
+}
+
 function Dialogs({ dialog, detail, close, run }: { dialog: Dialog | null; detail: BookingDetail; close: () => void; run: (path: string, body?: object, message?: string) => Promise<void> }) {
   const { booking } = detail;
   const confirmedBooking = booking.status === "CONFIRMED";
@@ -208,7 +259,7 @@ function Dialogs({ dialog, detail, close, run }: { dialog: Dialog | null; detail
       </ConfirmDialog>
       <ConfirmDialog open={o("cancel")} title="Cancel this booking?" confirmLabel="Cancel booking" tone="danger" reason={confirmedBooking ? "required" : "optional"} onClose={close}
         onConfirm={(reason) => run("cancel", reason ? { reason } : {}, "Booking cancelled. The time slot was released.")}>
-        {confirmedBooking ? "This booking is confirmed. Please tell the other person why you are cancelling. No payment has been taken, so nothing is refunded or charged." : "The request will be closed and cannot be reopened."}
+        {confirmedBooking ? `This booking is confirmed. Please tell the other person why you are cancelling. ${cancelPaymentNote(detail)}` : "The request will be closed and cannot be reopened."}
       </ConfirmDialog>
       <ConfirmDialog open={o("start")} title="Start this job?" confirmLabel="Start job" onClose={close}
         onConfirm={() => run("start", {}, "Job started.")}>
@@ -224,7 +275,7 @@ function Dialogs({ dialog, detail, close, run }: { dialog: Dialog | null; detail
       </ConfirmDialog>
       <ConfirmDialog open={dialog?.kind === "accept_quote"} title="Accept this quote?" confirmLabel="Accept and confirm" onClose={close}
         onConfirm={() => (dialog?.kind === "accept_quote" ? run(`quotes/${dialog.quote.id}/accept`, { expectedTotalBdt: dialog.quote.totalBdt }, "Quote accepted. Your booking is confirmed.") : Promise.resolve())}>
-        {dialog?.kind === "accept_quote" && <>You agree to {formatBdt(dialog.quote.totalBdt)} for {formatRange(booking.startAt, booking.endAt)}. This confirms the booking and reserves the time. No payment is taken yet.</>}
+        {dialog?.kind === "accept_quote" && <>You agree to {formatBdt(dialog.quote.totalBdt)} for {formatRange(booking.startAt, booking.endAt)}. This confirms the booking and reserves the time. You can pay after it is confirmed.</>}
       </ConfirmDialog>
       <ConfirmDialog open={dialog?.kind === "reject_quote"} title="Reject this quote?" confirmLabel="Reject quote" tone="danger" reason="optional" onClose={close}
         onConfirm={(reason) => (dialog?.kind === "reject_quote" ? run(`quotes/${dialog.quote.id}/reject`, reason ? { reason } : {}, "Quote rejected. The professional can send a new one.") : Promise.resolve())}>

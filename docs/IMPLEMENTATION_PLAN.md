@@ -127,7 +127,7 @@ Design and rules: [BOOKINGS.md](BOOKINGS.md). Routes (web): `/workers/[slug]/boo
 | Notifications | **Not implemented** (no notification system; events stored) |
 | Dispute evidence uploads | **Not implemented** (no private storage) |
 | Scheduled expiry / auto-completion | **Not implemented** (lazy expiry only) |
-| Payments, refunds | **Not started** (Step 6) |
+| Payments, refunds | **Implemented in Step 6** (see below) |
 
 ### Verification performed
 - Backend: typecheck, lint, 67 unit tests, 331 integration tests (real PostgreSQL), build, `npm audit` (0), migrations applied to an empty database and to a populated one, `prisma migrate diff` shows no drift.
@@ -135,4 +135,30 @@ Design and rules: [BOOKINGS.md](BOOKINGS.md). Routes (web): `/workers/[slug]/boo
 - Frontend: lint, typecheck, 109 tests, build, `npm audit` (0).
 - Real Chrome: login redirect, request, accept, reschedule, quote, cancel (reason required), job start/finish/confirm, dispute + admin resolution, availability editor, no-hours worker, stranger access; overflow + axe sweeps at 375/430/768/1366/1440 px.
 
-## Step 6: next (not started)
+## Step 6: Payments, bKash, SSLCOMMERZ, verification, transaction records and refund workflow - implemented, NOT verified with real providers
+
+Design, rules, state machines, configuration and the sandbox checklist: [PAYMENTS.md](PAYMENTS.md). Routes (web): `/bookings/[id]/pay`, `/payments`, `/payments/[reference]`.
+
+| Capability | Status |
+| --- | --- |
+| Payment/refund tables, append-only `payment_event`, DB-enforced invariants (migration `20261026000000_step6_payments`) | **Implemented and verified** (local PostgreSQL, no drift) |
+| Server-side initiation (amount from the stored agreed price, ownership/eligibility, idempotent, one open attempt) | **Implemented and verified** (integration tests) |
+| bKash tokenized checkout v2 adapter (create, execute once, query, refund, refund status) | **Implemented and unit-tested** against mocked HTTP. **Not sandbox-tested** (no credentials). Disabled until configured. |
+| SSLCOMMERZ v4 adapter (session, Order Validation API, lookup by tran_id, refund, refund status; IPN) | **Implemented and unit-tested** against mocked HTTP. **Not sandbox-tested.** IPN hash not implemented (unspecified). Disabled until configured. |
+| Trusted verification, mismatch quarantine, duplicate/late/parallel callback handling | **Implemented and verified** (mocked providers; mutation checks) |
+| Customer UI: checkout, honest provider availability, server-driven return/status page, history, refund request | **Implemented**; component-tested; **not exercised in a real browser this step** |
+| Refunds: request, admin approve/reject/create/process/reconcile, provider-confirmed completion, over-refund guards | **Implemented and verified** (mocked providers) |
+| Reconciliation: lazy re-verification, admin single/batch endpoints | **Implemented**; scheduled reconciliation **not implemented** (no job runner) |
+| Admin UI for payments/refunds | **Not implemented** (API only) |
+| Notifications / receipts | **Not implemented** |
+| Worker payouts, escrow, commissions, deposits | **Out of scope; not built** |
+| Manual (panel-made) refund recording | **Not implemented** |
+
+### Verification performed
+- Backend: typecheck, lint, 108 unit tests, 397 integration tests (real PostgreSQL; 66 are payments/refunds, run against a mocked provider network), build, `npm audit` (0), migration applied to an empty database and on top of the Step 5 schema, `prisma migrate diff` shows no drift.
+- Mutation checks (change code, expect tests to fail): skipping the amount comparison, the ownership check, the foreign-`val_id` check, treating bKash `Initiated` as paid, and the execute-once claim each make tests fail.
+- Frontend: lint, typecheck, 128 tests, build, `npm audit` (0).
+- Runtime smoke through the Next rewrite: form-encoded SSLCOMMERZ POST and bKash GET callbacks reach the backend, answer `303` to the web app; IPN answers `200 OK`; unauthenticated and foreign-Origin requests are refused; `/payments` and `/bookings/:id/pay` redirect to login.
+- **Not done:** any call to bKash or SSLCOMMERZ (sandbox or live); a real-browser pass of the new pages.
+
+## Step 7: next (not started)

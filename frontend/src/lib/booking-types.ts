@@ -1,3 +1,5 @@
+import type { PaymentView } from "./payment-types";
+
 export type BookingStatus =
   | "REQUESTED" | "QUOTED" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETION_PENDING"
   | "COMPLETED" | "CANCELLED" | "DECLINED" | "EXPIRED" | "DISPUTED";
@@ -105,7 +107,20 @@ export type BookingDetail = {
   rescheduleRequests: RescheduleRequest[];
   dispute: DisputeSummary | null;
   events: BookingEvent[];
+  /** Customer: full summary. Professional: only whether a verified payment exists. */
+  payment: BookingPayment;
 };
+
+export type BookingPayment =
+  | { state: "UNPAID" | "PAID" | "REFUNDED" }
+  | {
+      state: "UNPAID" | "IN_PROGRESS" | "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED" | "UNDER_REVIEW";
+      canPay: boolean;
+      amountBdt: number | null;
+      currency: string;
+      activeReference: string | null;
+      payments: PaymentView[];
+    };
 
 export type DisputeDetail = {
   dispute: DisputeSummary & {

@@ -43,7 +43,7 @@ See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md). The public websi
 implemented, along with public service categories, a searchable professional directory, public profiles,
 and favorites (professionals appear only after an admin approves and the owner publishes). Customers can request bookings, receive quotes,
 reschedule, cancel and open disputes, and workers manage availability ([docs/BOOKINGS.md](docs/BOOKINGS.md)).
-Payments, reviews, messaging, notifications, an admin dashboard UI, and identity-document verification are not built yet, and the UI says so rather than faking them. Google sign-in and
+Customers can pay a confirmed booking through bKash or SSLCOMMERZ and request refunds ([docs/PAYMENTS.md](docs/PAYMENTS.md)): the code is in place and tested against mocked providers, but **neither provider has been run against its real sandbox**, so each stays disabled until you configure credentials. Worker payouts, reviews, messaging, notifications, an admin dashboard UI, and identity-document verification are not built yet, and the UI says so rather than faking them. Google sign-in and
 real email delivery need your own credentials and have not been verified against the real services.
 
-Docs: [BOOKINGS](docs/BOOKINGS.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [API](docs/API.md) · [SECURITY](docs/SECURITY.md) · [DEPLOYMENT](docs/DEPLOYMENT.md)
+Docs: [PAYMENTS](docs/PAYMENTS.md) · [BOOKINGS](docs/BOOKINGS.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [API](docs/API.md) · [SECURITY](docs/SECURITY.md) · [DEPLOYMENT](docs/DEPLOYMENT.md)

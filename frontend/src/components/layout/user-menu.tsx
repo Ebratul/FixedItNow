@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, Heart, LogOut, UserRound } from "lucide-react";
+import { CalendarDays, ChevronDown, Heart, LogOut, Receipt, UserRound } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { LinkButton } from "@/components/ui/button";
@@ -82,6 +82,14 @@ export function UserMenu() {
           >
             <CalendarDays className="size-4 text-brand-600" aria-hidden />
             My bookings
+          </Link>
+          <Link
+            href="/payments"
+            onClick={close}
+            className="flex min-h-11 items-center gap-3 rounded-control px-3 text-sm font-medium text-ink hover:bg-brand-50"
+          >
+            <Receipt className="size-4 text-brand-600" aria-hidden />
+            Payments
           </Link>
           <Link
             href="/account/favorites"

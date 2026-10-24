@@ -1,6 +1,6 @@
 # Security (as implemented in Step 3)
 
-Scope: authentication, sessions, authorization, onboarding. Payment, messaging,
+Scope: authentication, sessions, authorization, onboarding, discovery, bookings and payments. Messaging,
 file upload, AI, and admin UI are later steps and are **not** covered.
 
 ## Controls
@@ -68,6 +68,33 @@ confirmation; a newly published `multer` advisory (transitive dependency of Nest
 
 Known limitations (Step 5): disputes are text-only (no evidence upload); no refund/payout outcomes; no notifications; expiry is lazy (no scheduler); a
 reviewer cannot yet see a general booking list; cancellation has no fee/refund policy (a product decision); customer-written text is not moderated.
+
+## Payments (Step 6)
+
+Full design: [PAYMENTS.md](PAYMENTS.md).
+
+| Risk | Control |
+| --- | --- |
+| Fake success (redirect, query string, forged callback/IPN) | Callback routes never read a status as truth. A payment becomes `SUCCEEDED` only inside `PaymentsService.applyVerification` from a provider server-to-server answer (bKash execute+query; SSLCOMMERZ Order Validation API). Tested: a success callback for an unpaid payment fails or stays `PROCESSING`. |
+| Reference / transaction substitution | The attempt is found by our unguessable reference (96 random bits); the provider's reported reference, payment id, amount and currency must all match; a `val_id` that validates to another `tran_id` is discarded; a provider transaction id already attached to another attempt cannot settle a second one. Mismatches are quarantined (`REQUIRES_REVIEW`), never attached silently. |
+| Amount / currency tampering | The amount is `booking.agreedAmountBdt` read in the server (strict body: only `provider`); compared as integer poisha; `BDT` only (CHECK). |
+| BOLA / IDOR | Initiation, status, history and refund requests load by owner; other users, the professional and admins-on-the-customer-routes get the same `404`. Admin routes use `RequireAdmin` and exclude bookings the admin takes part in. |
+| Replay / duplicates | `payment_event.dedupeKey`, conditional updates, "already settled" short-circuit, one execute per bKash payment (DB claim), `Idempotency-Key`, unique open-attempt / paid-per-booking / open-refund indexes. |
+| Race conditions | Booking-then-payment row locks in one transaction for every verification; the database refuses a second paid payment or open attempt even if code is wrong. Tested with parallel initiations, parallel callbacks and parallel refund requests/processing. |
+| Late callbacks | No state-machine edge leaves `SUCCEEDED` except to a refund state; a late success after cancellation is recorded as paid-but-ineligible and does **not** reactivate the booking. |
+| Ambiguity | Timeouts/5xx/auth errors never mean "failed": the attempt stays `PROCESSING`/`INITIATED` and is re-queried. Only provider-initiation failure (no URL issued) closes an attempt on a timeout. A refund timeout is never re-sent. |
+| CSRF vs. provider callbacks | The Origin check stays on every route. Only the callback controller opts out via `@SkipOriginCheck()` (cross-site by nature; no cookies used); a unit test fails if the decorator appears anywhere else. |
+| Open redirect | Return/callback URLs are built from configuration and the stored reference. No redirect target comes from the request. The checkout URL returned to the browser must be `https` on `.bka.sh` / `.sslcommerz.com`, and the frontend re-checks `https:` before navigating. |
+| Secrets | Read from the environment only; never returned (tested by scanning API bodies and stored events for the test secrets); the HTTP client's errors carry no URL/headers/body because some provider calls put the store password in the query string; bKash token in memory only. Startup refuses live credentials outside production and sandbox/live mix-ups. |
+| Logging | Callback errors log only an error name. No payload, URL, token or credential is logged. |
+| Audit | `payment_event` is append-only (trigger rejects UPDATE/DELETE; tested). Admin reconcile/refund actions also write `audit_log`. Customers and workers have no write path. |
+| Privacy | The professional sees only whether a verified payment exists. Customer name and email go to the provider as the provider requires (SSLCOMMERZ `cus_name`, `cus_email`). |
+| Abuse | Initiation 10/min, refund request 5/min, admin reconcile 10/min (batch 2/min), callbacks 60/min per IP, 10 attempts per booking per hour. |
+
+Known limitations (Step 6): nothing was verified against the real providers; the bKash callback `signature` and the SSLCOMMERZ IPN `verify_sign` are not checked
+(algorithms unspecified in the pages read; verification is server-to-server instead); a forged `cancel`/`failure` callback needs the unguessable reference but, if it
+arrived, would close the attempt (a later provider-verified payment still upgrades it); no scheduler for reconciliation; callback rate limits are per instance;
+no admin UI; personal data minimisation toward providers has not had a legal review.
 
 ## Account-linking policy
 

@@ -65,6 +65,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "reschedule.accepted": "Reschedule accepted",
   "reschedule.rejected": "Reschedule declined",
   "reschedule.withdrawn": "Reschedule withdrawn",
+  "payment.verified": "Customer's payment verified",
   "dispute.opened": "Dispute opened",
   "dispute.under_review": "Dispute under review",
   "dispute.withdrawn": "Dispute withdrawn",
