@@ -39,7 +39,8 @@ reset 5/min, resend verification 3/5 min, everything else 100/min. `429` with `X
 | --- | --- | --- |
 | `GET /health` | Public | `{ status: "ok" }`; `503` if the database is down. |
 | `GET /config/auth` | Public | `{ googleEnabled, emailVerificationRequired, minPasswordLength }`. |
-| `GET /categories` | Public | Active service categories `{ slug, name, description }`. |
+| `GET /categories` | Public | Active categories `{ slug, name, description, workerCount }`. `workerCount` is **computed** from publicly listed workers. |
+| `GET /categories/:slug` | Public | One active category (same shape under `category`). `404` for unknown, malformed, or inactive slugs. |
 | `GET /me` | Session | Caller's own account summary: `user`, `isAdmin`, `customer`, `worker`. |
 | `PUT /me/customer-profile` | Session | Upsert own customer profile `{ displayName, preferredDivision? }`. |
 | `PUT /me/worker-profile` | Session | Save a draft (any subset): `displayName, headline, bio, experienceYears, languages, serviceAreas, services[], onboardingStep`. **Strict**: unknown keys (e.g. `verificationStatus`, `userId`, `role`) -> `400`. |
@@ -55,3 +56,61 @@ reset 5/min, resend verification 3/5 min, everything else 100/min. `429` with `X
 `400` validation, `401` no/invalid session, `403` forbidden / cross-origin / unverified email,
 `404` unknown id, `409` wrong state (e.g. already submitted), `429` throttled, `5xx` server.
 Error bodies never include stack traces, SQL, or submitted values.
+
+## Discovery (Step 4)
+
+### Public listing rules
+A worker appears in **any** public read only if all hold: onboarding `SUBMITTED`, verification `VERIFIED`
+(admin-approved), the owner **published** it, an admin has **not suspended** it, and it has a slug.
+This is a single shared filter (`ELIGIBLE_WORKER`) used by search, profile, category counts and favorites.
+
+### `GET /workers` (Public)
+Search the directory. Throttled to 60 requests/min/IP. **Never** returns per-viewer data (no favorite flags).
+
+| Query param | Rule |
+| --- | --- |
+| `q` | Free text, trimmed, <= 80 chars. Blank = ignored. Split on whitespace (max 5 terms); every term must match the name, headline, bio, or an active category name (case-insensitive). `%`, `_` and `\` are matched literally. |
+| `category` | Category slug (`^[a-z0-9-]{1,50}$`); must be an **active** category. |
+| `location` | One of the 8 divisions (exact, e.g. `Dhaka`). Text/area match, **not** distance. |
+| `maxPrice` | Integer 50-1,000,000. Matches workers whose cheapest *priced* service is <= value; quote-only workers are excluded. |
+| `minExperience` | Integer 0-60 (years). |
+| `sort` | `newest` (default, by publish time), `experience`, `price_asc`, `price_desc`. Missing values sort last. Ties always break on `id`, so ordering is deterministic. |
+| `page` | Integer 1-500 (default 1). |
+| `pageSize` | Integer 1-48 (default 12). |
+
+Invalid values return `400` (`Validation failed` + `errors[]`). Unknown parameters are ignored, never used.
+Response: `{ workers: Card[], page, pageSize, total, totalPages, sort }`. An empty directory is `200` with `workers: []`.
+
+`Card`: `id, slug, displayName, headline, primaryCategory, categories[], serviceAreas[], experienceYears, startingPriceBdt, verification ("VERIFIED"), rating (null), reviewCount (0), publishedAt`.
+`rating`/`reviewCount` are explicitly null/0 because no review feature exists yet.
+
+### `GET /workers/:slug` (Public)
+Public profile: card fields plus `bio, languages, updatedAt, services[{ category, pricingModel, basePriceBdt, pricingNotes }]`.
+Hidden, unpublished, suspended, draft, malformed and unknown slugs all return the **same `404`**.
+**Never** includes email, user id, review notes, suspension data, or verification details.
+
+### Owner endpoints (session required)
+| Method & path | Description |
+| --- | --- |
+| `PUT /me/worker-profile` | Unchanged from Step 3 (strict schema). Also recomputes `startingPriceBdt`. `slug`, `publishedAt`, `suspendedAt`, `startingPriceBdt`, `verificationStatus`... are **rejected** (`400`). |
+| `POST /me/worker-profile/publish` | Make the profile public. `409` unless approved; `403` if suspended; `400` if no profile. Idempotent; allocates the slug once (`<name>-<8 hex>`, stable thereafter). |
+| `POST /me/worker-profile/unpublish` | Remove from public view. Idempotent; keeps the slug. |
+
+`GET /me` (`worker.profile`) now also returns `slug`, `publishedAt`, `suspendedAt`, `startingPriceBdt`
+(never the suspension reason).
+
+### Favorites (session required; owner is always the session user)
+| Method & path | Description |
+| --- | --- |
+| `GET /me/favorites?page&pageSize` | Caller's favorites as cards (max pageSize 48). Workers no longer public are hidden. |
+| `GET /me/favorites/ids` | Ids of the caller's still-listed favorites (max 500) to render heart state. |
+| `PUT /me/favorites/:workerId` | Add (idempotent). `:workerId` is a worker-profile UUID. `404` if not publicly listed, `400` if it is your own profile or not a UUID. |
+| `DELETE /me/favorites/:workerId` | Remove (idempotent, allowed even after the worker was unlisted). |
+
+### Admin (admin only)
+| Method & path | Description |
+| --- | --- |
+| `POST /admin/workers/:id/suspension` | `{ suspended: boolean, reason? }` (reason required to suspend; stored internally, never returned). Audit-logged; an admin cannot moderate their own profile. |
+| `GET /admin/workers` | Rows now include `published` and `suspended`. |
+
+There are **no** category create/update/delete endpoints (categories are seed/migration managed).

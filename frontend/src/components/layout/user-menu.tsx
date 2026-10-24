@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, Heart, LogOut, UserRound } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { LinkButton } from "@/components/ui/button";
@@ -74,6 +74,14 @@ export function UserMenu() {
           >
             <UserRound className="size-4 text-brand-600" aria-hidden />
             My account
+          </Link>
+          <Link
+            href="/account/favorites"
+            onClick={close}
+            className="flex min-h-11 items-center gap-3 rounded-control px-3 text-sm font-medium text-ink hover:bg-brand-50"
+          >
+            <Heart className="size-4 text-brand-600" aria-hidden />
+            Favorites
           </Link>
           <button
             type="button"

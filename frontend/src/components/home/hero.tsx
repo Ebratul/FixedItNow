@@ -1,5 +1,5 @@
 import { BadgeCheck, Banknote, Search, ShieldCheck } from "lucide-react";
-import { SERVICE_CATEGORIES } from "@/lib/categories";
+import { CategoryIcon, FEATURED_CATEGORIES } from "@/lib/category-icons";
 import { SearchForm } from "./search-form";
 
 const HIGHLIGHTS = [
@@ -58,13 +58,13 @@ export function Hero() {
               Search services
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {SERVICE_CATEGORIES.slice(0, 6).map(({ slug, name, icon: Icon }) => (
+              {FEATURED_CATEGORIES.map(({ slug, name }) => (
                 <div
                   key={slug}
                   className="flex items-center gap-3 rounded-card border border-line p-3"
                 >
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-brand-100 text-brand-700">
-                    <Icon className="size-5" />
+                    <CategoryIcon slug={slug} className="size-5" />
                   </span>
                   <span className="text-sm font-semibold text-ink">{name}</span>
                 </div>

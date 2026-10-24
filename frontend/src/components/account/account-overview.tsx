@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { BriefcaseBusiness, Heart, KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/account/auth-gate";
 import { VerificationBadge } from "@/components/account/worker-status";
@@ -100,6 +100,18 @@ function Overview({ me }: { me: Me }) {
           </ul>
         </Card>
       </div>
+
+      <Card className="mt-5 flex items-center justify-between gap-4 p-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <Heart className="size-5 text-brand-600" aria-hidden /> Favorites
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">Professionals you saved.</p>
+        </div>
+        <LinkButton href="/account/favorites" variant="secondary" size="sm">
+          View favorites
+        </LinkButton>
+      </Card>
 
       <SignInMethods />
 

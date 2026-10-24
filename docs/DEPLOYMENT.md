@@ -65,7 +65,7 @@ because it truncates tables.
 ### Frontend (`frontend/.env.local`)
 | Variable | Secret? | Notes |
 | --- | --- | --- |
-| `BACKEND_URL` | no | where Next proxies `/api/v1/*`. **Read at build time** (rewrites are baked into the build); set it for `npm run build`. |
+| `BACKEND_URL` | no | where Next reaches the backend. Used (a) for the `/api/v1/*` rewrite, **read at build time**, and (b) by server components (`/workers`, `/services`, profiles) at **request time**. Set it for both `npm run build` and `npm start`. |
 | `NEXT_PUBLIC_SITE_URL` | no | production origin; enables absolute OG URLs and sitemap |
 
 Nothing secret is ever exposed to the browser: only `NEXT_PUBLIC_*` values are bundled.
@@ -98,7 +98,20 @@ for the sender domain. Until SMTP is configured, users cannot verify their email
 - Grant the first admin with `npm run admin:grant` from a trusted machine.
 - Serve the web app and API on the **same site** (same origin recommended).
 
+## Search performance
+
+Measured locally (single PostgreSQL 18 instance, 20,000 published profiles, 2 services each): directory
+and filtered queries returned in roughly 5-20 ms; free-text search in roughly 40-70 ms (case-insensitive
+substring scan over the published set). Before the directory grows well beyond ~100k profiles, add a
+`pg_trgm` GIN index or a `tsvector` column (raw-SQL migration) for the text columns.
+
 ## Migrations
+
+`backend/prisma/migrations/20261024000000_step4_discovery` (additive): adds nullable columns
+`slug, publishedAt, suspendedAt, suspensionReason, startingPriceBdt` to `worker_profile`, the `favorite`
+table, and indexes; it backfills `startingPriceBdt` from existing `worker_service` rows. No column is dropped
+or rewritten; existing profiles stay **unpublished** until their owners publish. Review before `migrate deploy`.
+
 
 `backend/prisma/migrations/20261023212432_init_auth_and_onboarding` creates all tables from scratch (the
 database was empty). It was applied only to disposable local databases in this step. **No production database exists or was touched.**

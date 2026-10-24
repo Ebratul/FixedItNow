@@ -12,7 +12,9 @@ export default function HomePage() {
   return (
     <>
       <Hero />
-      <CategorySection />
+      <Suspense fallback={<CategoriesFallback />}>
+        <CategorySection />
+      </Suspense>
       <HowItWorks />
       <Suspense fallback={<FeaturedFallback />}>
         <FeaturedProfessionals />
@@ -21,6 +23,18 @@ export default function HomePage() {
       <WorkerCta />
       <FaqSection />
     </>
+  );
+}
+
+function CategoriesFallback() {
+  return (
+    <section aria-busy="true" aria-label="Loading services" className="section-y">
+      <div className="container-page grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="h-44" />
+        ))}
+      </div>
+    </section>
   );
 }
 

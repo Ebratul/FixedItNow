@@ -4,11 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
-import { SERVICE_CATEGORIES } from "@/lib/categories";
+import { CategoryIcon, FEATURED_CATEGORIES } from "@/lib/category-icons";
 import { cn } from "@/lib/cn";
 import { useDismiss } from "@/lib/use-dismiss";
 
-const FEATURED = SERVICE_CATEGORIES.slice(0, 6);
 
 /**
  * Desktop "Services" disclosure. The trigger toggles a panel of links; it
@@ -47,14 +46,14 @@ export function ServicesMenu() {
           className="absolute top-full left-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-canvas p-2 shadow-pop"
         >
           <ul>
-            {FEATURED.map(({ slug, name, icon: Icon }) => (
+            {FEATURED_CATEGORIES.map(({ slug, name }) => (
               <li key={slug}>
                 <Link
-                  href={`/workers?category=${slug}`}
+                  href={`/services/${slug}`}
                   onClick={() => setOpen(false)}
                   className="flex min-h-11 items-center gap-3 rounded-control px-3 text-sm font-medium text-ink hover:bg-brand-50"
                 >
-                  <Icon className="size-4 text-brand-600" aria-hidden />
+                  <CategoryIcon slug={slug} className="size-4 text-brand-600" />
                   {name}
                 </Link>
               </li>

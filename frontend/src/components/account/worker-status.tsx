@@ -18,7 +18,7 @@ export const VERIFICATION_LABELS: Record<
   VERIFIED: {
     label: "Approved",
     tone: "success",
-    description: "A reviewer approved your profile. Public listings are not live yet.",
+    description: "A reviewer approved your profile. It is only listed publicly after you publish it.",
   },
   REJECTED: {
     label: "Not approved",

@@ -24,6 +24,28 @@ file upload, AI, and admin UI are later steps and are **not** covered.
 | Headers | `helmet` on the API; baseline headers (`nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`) on the web app. |
 | Secrets | `.env` is git-ignored; examples contain placeholders only. Env validation fails fast on weak/missing secrets and unsafe production settings. |
 
+## Discovery and privacy (Step 4)
+
+| Area | What is in place |
+| --- | --- |
+| Visibility | One shared filter (`ELIGIBLE_WORKER`) is spread into every public query; hidden, unpublished, suspended, draft and unknown profiles return an identical `404`. Search terms and filters cannot widen it (tested). |
+| Private data | Public responses use explicit `select`s: no email, user id, review note, suspension reason, or verification data (tested by scanning serialized responses). Profile identifiers are slugs (`name-8hex`), not user ids or emails. |
+| Search safety | Prisma query API only (no raw SQL). `sort` is a closed enum; numeric/enum filters are bounded; unknown params ignored. `%`, `_`, `\` are escaped so they match literally. Injection-looking input returns normal empty results (tested). |
+| Ownership | Owner publish/unpublish act on the session's profile; the edit schema rejects `slug`, `publishedAt`, `suspendedAt`, `startingPriceBdt`, `verificationStatus`, `id`, `userId`. Only admins can suspend; an admin cannot moderate themselves; reasons stay internal. |
+| Favorites | Session-only identity; unique constraint prevents duplicates under concurrency (tested with parallel requests); lists are private; own-profile and non-public targets rejected. The browser cache of favorite ids is cleared when the signed-in user changes. |
+| Rendering | Worker text is rendered as React text (escaped); there are no user-provided links, HTML or images. A `<script>`/`<img onerror>` payload renders inert (tested). |
+| Rate limiting | `GET /workers` is limited to 60/min/IP on top of the global 120/min. |
+| Categories | No write endpoints exist; unauthenticated, ordinary-user and admin write attempts change nothing (tested). |
+
+Findings in Step 4:
+1. Prisma's `contains` does **not** escape `%`/`_`, so `q=%` matched every profile. Fixed with `escapeLike()` and a test.
+2. `startingPriceBdt` had to be backfilled for existing rows; done additively in the migration.
+3. `/workers/[slug]` and `/services/[slug]` unknown pages are soft-404s (see ARCHITECTURE).
+
+Known limitations (Step 4): edits to a **published** profile go live immediately without re-review (moderation
+is suspend-after-the-fact); no profile photos (initials avatar only, no upload endpoint); `VERIFIED` still
+means "admin reviewed the profile", not an identity check.
+
 ## Account-linking policy
 
 Google sign-in **never** auto-merges into an existing account because the email

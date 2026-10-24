@@ -75,4 +75,35 @@ progress), `/account`.
 ### Known gaps
 See [SECURITY.md](SECURITY.md) "Not done / known limitations".
 
-## Step 4: next (not started)
+
+## Step 4: Worker profiles, categories, search, filters, favorites — implemented
+
+**Routes (web):** `/services` (API-backed categories with computed counts), `/services/[slug]`,
+`/workers` (search + filters + sorting + pagination), `/workers/[slug]` (public profile),
+`/account/favorites`. Owners publish/unpublish from `/onboarding/worker` once approved.
+
+| Capability | Status |
+| --- | --- |
+| Categories from DB, active-only, computed counts, no write endpoints | **Implemented and verified** |
+| Worker lifecycle: draft -> submitted -> approved -> published; admin suspension | **Implemented and verified** |
+| Public directory + profile with strict visibility and private-field protection | **Implemented and verified** |
+| Search (name/headline/bio/category), filters (category, location, max price, min experience), sorting, bounded pagination | **Implemented and verified** |
+| Favorites (add/remove/list, unique, private) | **Implemented and verified** |
+| Owner profile editing (strict validation, ownership) | **Implemented and verified** (reuses Step 3 wizard) |
+| Responsive + axe checks on discovery pages | **Implemented and verified** (Chrome; 375/430/768/1366/1440 px) |
+| Rating/review display, rating filter/sort | **Deferred** (no review data; shows "No reviews yet") |
+| Availability filter | **Deferred** (no availability data) |
+| Distance/map search, relevance ranking | **Deferred** (location is division-level text; sort is explicit) |
+| Profile photos/uploads | **Deferred** (initials avatar; no upload endpoint) |
+| Booking, payment, messaging, AI | **Not started** (later steps) |
+| Admin category management UI | **Deferred** (categories are seed/migration managed) |
+| Full-text/trigram index | **Deferred** (not needed at measured scale) |
+
+### Verification performed
+- Backend: typecheck, lint, 35 unit tests, 163 integration tests on a real PostgreSQL test DB, build, `npm audit`.
+- Frontend: lint, typecheck, 87 tests, build, `npm audit`.
+- Real Chrome: search, filters, chips, clear-all, pagination, category counts, profile page, favorites (logged-out redirect,
+  login return, persistence after refresh, list, unfavorite), mobile filter toggle; axe + overflow sweep of 11 pages x 5 widths.
+- Query timing against a 20,000-profile scratch database (see DEPLOYMENT.md).
+
+## Step 5: next (not started)

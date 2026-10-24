@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchInput } from "@/components/ui/search-input";
 import { filterCategories } from "@/lib/categories";
+import type { CategorySummary } from "@/lib/category-types";
 import { CategoryCard } from "./category-card";
 
-/** Searchable category grid. Filtering is local to the presentation data. */
-export function ServiceDirectory() {
+/** Searchable category grid. Categories come from the API (server-rendered). */
+export function ServiceDirectory({ categories }: { categories: CategorySummary[] }) {
   const [query, setQuery] = useState("");
-  const results = filterCategories(query);
+  const results = filterCategories(categories, query);
 
   return (
     <div>
@@ -19,7 +20,7 @@ export function ServiceDirectory() {
         <SearchInput
           id="service-filter"
           label="Search service categories"
-          placeholder="e.g. plumber, laptop, painting"
+          placeholder="e.g. plumbing, laptop, painting"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           maxLength={80}
@@ -27,9 +28,7 @@ export function ServiceDirectory() {
       </div>
 
       <p className="mt-4 text-sm text-ink-subtle" role="status">
-        {results.length === 1
-          ? "1 category"
-          : `${results.length} categories`}
+        {results.length === 1 ? "1 category" : `${results.length} categories`}
         {query.trim() && ` match “${query.trim()}”`}
       </p>
 

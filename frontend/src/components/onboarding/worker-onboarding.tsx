@@ -58,7 +58,7 @@ function Flow({ me, categories, onChanged }: { me: Me; categories: Category[]; o
   const [editing, setEditing] = useState(false);
 
   if (profile && submitted && !editing) {
-    return <StatusView profile={profile} onEdit={() => setEditing(true)} />;
+    return <StatusView profile={profile} onEdit={() => setEditing(true)} onChanged={onChanged} />;
   }
   return (
     <Wizard
@@ -70,7 +70,72 @@ function Flow({ me, categories, onChanged }: { me: Me; categories: Category[]; o
   );
 }
 
-function StatusView({ profile, onEdit }: { profile: WorkerProfile; onEdit: () => void }) {
+function PublicationCard({ profile, onChanged }: { profile: WorkerProfile; onChanged: () => void }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string>();
+  const published = profile.publishedAt !== null;
+
+  async function change(action: "publish" | "unpublish") {
+    if (pending) return;
+    setPending(true);
+    setError(undefined);
+    try {
+      await api(`/me/worker-profile/${action}`, { method: "POST", body: {} });
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Something went wrong. Please try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (profile.suspendedAt) {
+    return (
+      <Alert tone="error" title="Your profile is suspended" className="mt-4">
+        FixedItNow suspended this profile, so it is not public. Contact support once support channels are available.
+      </Alert>
+    );
+  }
+  return (
+    <div className="mt-4 rounded-card border border-line p-4">
+      <h3 className="font-bold">Public listing</h3>
+      <p className="mt-1 text-sm text-ink-muted">
+        {published
+          ? "Your profile is public. Customers can find it in search and save it to their favorites."
+          : "Your profile is approved but not public. Publish it to appear in search."}
+      </p>
+      {error && <Alert tone="error" className="mt-3">{error}</Alert>}
+      <div className="mt-3 flex flex-wrap gap-3">
+        {published ? (
+          <>
+            {profile.slug && (
+              <LinkButton href={`/workers/${profile.slug}`} variant="secondary">
+                View public profile
+              </LinkButton>
+            )}
+            <Button variant="ghost" onClick={() => change("unpublish")} loading={pending}>
+              Unpublish
+            </Button>
+          </>
+        ) : (
+          <Button variant="accent" onClick={() => change("publish")} loading={pending}>
+            Publish profile
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatusView({
+  profile,
+  onEdit,
+  onChanged,
+}: {
+  profile: WorkerProfile;
+  onEdit: () => void;
+  onChanged: () => void;
+}) {
   const info = VERIFICATION_LABELS[profile.verificationStatus];
   const canResubmit = profile.verificationStatus === "RESUBMISSION_REQUIRED";
   return (
@@ -87,9 +152,12 @@ function StatusView({ profile, onEdit }: { profile: WorkerProfile; onEdit: () =>
             {profile.reviewNote}
           </Alert>
         )}
+        {profile.verificationStatus === "VERIFIED" && (
+          <PublicationCard profile={profile} onChanged={onChanged} />
+        )}
         <Alert tone="info" className="mt-4">
           Approval here means a reviewer checked your profile. Identity document verification is not
-          available yet, and no public worker listings exist yet.
+          available yet.
         </Alert>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button onClick={onEdit} variant={canResubmit ? "primary" : "secondary"}>

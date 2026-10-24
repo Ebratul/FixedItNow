@@ -42,6 +42,30 @@ Browser --(same origin)--> Next.js web app (:3000)
 - `worker_profile.onboardingStatus` (`DRAFT`|`SUBMITTED`) is separate from `verificationStatus`
   (`NOT_SUBMITTED`|`PENDING`|`VERIFIED`|`REJECTED`|`RESUBMISSION_REQUIRED`).
 
+## Discovery (Step 4)
+- **Source of truth:** categories, worker profiles and counts come from PostgreSQL through the API.
+  `frontend/src/lib/category-icons.tsx` holds only presentation (icons); its `FEATURED_CATEGORIES`
+  list feeds the decorative hero panel and header menu (links into real category pages).
+- **Lifecycle** (`worker_profile`): `DRAFT` -> submit -> `PENDING` -> admin `VERIFIED` -> owner **publish** -> public.
+  Admin `suspend` hides it again. Visibility is one shared filter, `ELIGIBLE_WORKER`
+  (`backend/src/workers/eligibility.ts`).
+- **Public projection:** explicit Prisma `select`s (`cardSelect`, `profileSelect`) define what leaves the
+  server; private columns cannot leak because they are never selected.
+- **Search:** Prisma `where`/`orderBy` only (no raw SQL). Text uses case-insensitive `contains` with
+  LIKE-escaping. `sort` is a closed enum mapped to fixed ordering lists ending in `id`.
+- **Denormalised `startingPriceBdt`:** minimum priced service, maintained in the same transaction as
+  service edits, so price filter/sort can use a b-tree index.
+- **Indexes added:** `publishedAt`, `startingPriceBdt`, `experienceYears`, GIN on `serviceAreas`,
+  `worker_service(categoryId)`, `favorite(userId, createdAt)`, unique `slug`, unique `(userId, workerProfileId)`.
+  Text search is a sequential scan over the already-filtered published set (see limitations).
+- **Favorites:** `favorite` table with a unique `(userId, workerProfileId)` constraint; identity is always the session.
+- **Frontend:** `/workers`, `/services`, `/services/[slug]` and `/workers/[slug]` are server components that
+  fetch the **public** API with `cache: "no-store"` (no cookies forwarded, so no per-user data can be cached or
+  rendered). Filters are a plain GET form, so URLs are shareable and work without JavaScript; the heart button
+  is the only client-side piece (`favorites-store.ts`, cleared when the session user changes).
+- Unknown/hidden profile and category pages render the not-found UI with `noindex`; because content is streamed
+  (Cache Components), the HTTP status of that response is `200` (soft 404), not `404`.
+
 ## Account linking
 Google never auto-links to an existing email account (see SECURITY.md). Linking is explicit
 (`linkSocial`) for a signed-in user.

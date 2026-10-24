@@ -78,6 +78,11 @@ export type WorkerProfile = {
     | "REJECTED"
     | "RESUBMISSION_REQUIRED";
   reviewNote: string | null;
+  /** Public listing state. `slug` is set after the first publish. */
+  slug: string | null;
+  publishedAt: string | null;
+  suspendedAt: string | null;
+  startingPriceBdt: number | null;
   services: WorkerService[];
 };
 
