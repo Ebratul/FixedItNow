@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# browser e2e output (contains test-session cookies)
+/e2e/seed.json
+/e2e/shots/
+/e2e/result.json

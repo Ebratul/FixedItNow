@@ -91,6 +91,13 @@ Details: [PAYMENTS.md](PAYMENTS.md). Summary:
 - **CSRF:** the global Origin guard now honours `@SkipOriginCheck()`, used only by the provider callback controller.
 - **Frontend:** `/bookings/[id]/pay` (checkout), `/payments` (history), `/payments/[reference]` (the return page: it asks the server and polls; a URL parameter is never read as status).
 
+## Operations (Step 10)
+Details: [RUNBOOK.md](RUNBOOK.md), [AUDIT.md](AUDIT.md). Summary:
+- **Request ids and logs:** `requestLogger` (first middleware) sets `X-Request-Id` (an inbound id is accepted only if it is a short harmless token) and writes one JSON access-log line per request using the **route template**; the id is kept in an `AsyncLocalStorage` and becomes the AI service's correlation id. `AllExceptionsFilter` turns unexpected errors into a generic 500 carrying the request id and logs only a safe summary.
+- **Health:** `/health/live` (no dependencies), `/health` and `/health/ready` (database, 2 s), and admin-only `/admin/ops/status` (AI reachability, provider modes, human work queues). The AI service, payments and SMTP are not readiness dependencies.
+- **Database limits:** pool size, connect timeout and statement timeout are configuration; `audit_log` is append-only via trigger.
+- **Packaging:** one Dockerfile per service (the API has a separate `migrate` target for the release job); a disposable compose stack and a GitHub Actions workflow verify them.
+
 ## Reviews, community and moderation (Step 9)
 Details: [COMMUNITY.md](COMMUNITY.md). Summary:
 - **Modules:** `reviews/` (booking-linked reviews, `ratings.ts` = the one definition of a counted review), `community/` (posts, comments, likes, reports; also hosts the proposals and moderation controllers), `proposals/`, `moderation/` (admin API). Reviews are not a dependency of bookings: the booking detail calls the pure `reviewSummary()` query, like payments.

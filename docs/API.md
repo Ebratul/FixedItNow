@@ -172,6 +172,16 @@ Design, schemas and safety rules: [AI.md](AI.md). All paths are under `/api/v1`.
 | `POST /ai/chat` | session | Body (strict) `{ message 1-1000, intent?, locale?: auto\|en\|bn, action?: message\|search }`; no user id or history field. Returns `{ kind, message, language, intent, intentSources, clarification, recommendations[{ rank, matchedOn, worker }], total, relaxations, answer, notes, mode }`. `recommendations[].worker` is the public card, re-read from PostgreSQL. Errors: `503 AI_NOT_CONFIGURED`, `429 AI_RATE_LIMITED` (+`retryAfterSeconds`), `504 AI_TIMEOUT`, `502 AI_UNAVAILABLE`. Per-user limit `AI_RATE_LIMIT_PER_MINUTE`; 30/min/IP. |
 | `GET /internal/ai/workers`, `GET /internal/ai/categories` | AI service only | Bearer `APP_API_SERVICE_TOKEN`. Same arguments and projection as `GET /workers` (first page, `pageSize` <= 24) and the active category list. `404` when the assistant is not configured; `401` for any other credential, including a user session. Not for browsers; block `/api/v1/internal/` at the proxy. |
 
+## Operations (Step 10)
+
+| Method & path | Access | Notes |
+| --- | --- | --- |
+| `GET /health/live` | Public | `{ status: "ok" }`. No dependency checks (liveness). Not rate-limited. |
+| `GET /health`, `GET /health/ready` | Public | `{ status: "ok", checks: { database: "ok" } }`, or `503 { checks: { database: "unavailable" } }` after a 2 s database check. No versions, hosts or error text. |
+| `GET /admin/ops/status` | admin | `{ database, ai: { configured, reachable?, llm? }, payments: { bkash, sslcommerz: "not_configured"\|"sandbox"\|"live", refundsEnabled }, mail, queues: { paymentsRequiringReview, paymentsUnresolvedOver30Minutes, refundsAwaitingProvider, refundsAwaitingDecision, disputesOpen, reportsOpen } }`. Counts and flags only. |
+
+Every response carries `X-Request-Id`. A client may send its own (8-64 characters of `A-Za-z0-9_-`; anything else is replaced). Unexpected errors answer `500 { statusCode, error, message: "Internal server error", requestId }`.
+
 ## Reviews, community, proposals and moderation (Step 9)
 
 Full rules, state machines and error codes: [COMMUNITY.md](COMMUNITY.md). Summary (all under `/api/v1`; "session" = signed-in verified user; unsafe methods need the web `Origin`; request bodies are strict, so unknown or protected fields are `400`):

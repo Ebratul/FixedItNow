@@ -15,7 +15,7 @@ export const STEPS = [
   {
     icon: CalendarCheck,
     title: "Request or book",
-    text: "Send a request, agree on the details, and keep the conversation in one place.",
+    text: "Send a request for a time that suits you. The professional accepts it or sends a quote, and you confirm.",
   },
   {
     icon: Star,
@@ -36,7 +36,7 @@ export function HowItWorks() {
           align="center"
           eyebrow="How it works"
           title="From problem to solved in four steps"
-          description="This is the experience FixedItNow is being built to deliver. Booking and reviews are rolling out in stages."
+          description="Booking, quotes, payments and reviews are available. In-app messaging and notifications are not available yet."
         />
         <ol className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map(({ icon: Icon, title, text }, index) => (

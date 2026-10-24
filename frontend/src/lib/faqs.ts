@@ -10,26 +10,26 @@ export const FAQS: Faq[] = [
   {
     question: "Can I book a professional today?",
     answer:
-      "Not yet. You can create an account and set up a customer or worker profile, but public professional listings, search, and bookings are still being built. Pages that depend on those features say so clearly.",
+      "Yes, where professionals are listed. Search for a service, open a profile, and send a booking request for a time the professional has published. The professional accepts it (or sends a quote), and only then is the time reserved. Availability is confirmed through the booking, not through search.",
   },
   {
-    question: "How will professionals be verified?",
+    question: "What does \"Profile reviewed\" mean?",
     answer:
-      "Workers will submit identity documents that are stored privately and reviewed by authorised staff. A Verified badge will appear only after a reviewer approves the worker. Verification does not mean a government check unless an approved process says so.",
+      "A FixedItNow reviewer approved the professional's profile before it was published. It is not an identity or government check: identity-document verification is not available yet.",
   },
   {
-    question: "How will pricing work?",
+    question: "How does pricing work?",
     answer:
-      "Professionals will list the services they offer with a base price and pricing notes. Final prices for a job are agreed through the booking and quote flow before work begins.",
+      "Professionals list the services they offer with a fixed price, an hourly rate, or a quote. The price shown on search is a starting price. The final price is fixed when the booking is confirmed or a quote is accepted, before work begins.",
   },
   {
     question: "How can I join as a professional?",
     answer:
-      "Create an account, then complete the worker profile steps and submit it for review. A reviewer approves it, asks for changes, or declines it. Identity document verification and public listings are not available yet.",
+      "Create an account, then complete the worker profile steps and submit it for review. A reviewer approves it, asks for changes, or declines it. Once approved you choose when to publish, and set your working hours to receive booking requests. Identity-document verification is not available yet.",
   },
   {
-    question: "Which payment methods will be supported?",
+    question: "Which payment methods are supported?",
     answer:
-      "Payment support is planned and depends on provider approval. We will not show a payment option as available until it works end to end.",
+      "bKash and SSLCOMMERZ, when the platform has enabled them. The checkout page shows which methods are available and marks a method as unavailable if it is not configured. A payment is recorded as successful only after we verify it directly with the provider. Paying is optional for confirming a booking; refunds for cancelled bookings are reviewed by our team.",
   },
 ];

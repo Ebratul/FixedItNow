@@ -82,6 +82,22 @@ Nothing secret is ever exposed to the browser: only `NEXT_PUBLIC_*` values are b
 ### AI assistant variables (optional; see [AI.md](AI.md))
 Backend: `AI_SERVICE_URL`, `AI_SERVICE_TOKEN` (**secret**), `APP_API_SERVICE_TOKEN` (**secret**), `AI_REQUEST_TIMEOUT_SECONDS` (30), `AI_RATE_LIMIT_PER_MINUTE` (10): all three of URL and tokens, or none (the API refuses to start otherwise). AI service (`rag_agent/.env.example`): `AI_SERVICE_TOKEN`, `APP_API_SERVICE_TOKEN` (the same two values), `APP_API_BASE_URL`, `OPENROUTER_API_KEY` (**secret**), `OPENROUTER_MODEL`, `OPENROUTER_RESPONSE_FORMAT`, limits. Run the AI service privately (`rag_agent/Dockerfile`); block `/api/v1/internal/` at the public proxy; keep `APP_ENV=production`.
 
+### Operations variables (Step 10; all optional, see [RUNBOOK.md](RUNBOOK.md))
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `DATABASE_POOL_MAX` | 10 | Per API instance. Keep instances x this below the database connection limit. |
+| `DATABASE_CONNECT_TIMEOUT_MS` | 5000 | Fail fast when the pool or database is exhausted. |
+| `DATABASE_STATEMENT_TIMEOUT_MS` | 15000 | PostgreSQL cancels longer queries. |
+| `HTTP_LOG` | on (off in tests) | One JSON access-log line per request: route template, status, duration, request id. Never query strings or bodies. |
+
+## Containers, CI and the disposable staging stack (Step 10)
+
+* `backend/Dockerfile` (targets `runtime` and `migrate`), `frontend/Dockerfile`, `rag_agent/Dockerfile`: non-root, health-checked images. The web image bakes `BACKEND_URL` into the `/api/v1/*` rewrite at build time (`--build-arg BACKEND_URL=...`) and sets `NEXT_OUTPUT=standalone` itself; plain `npm run build` / `npm start` are unchanged.
+* `backend/docker-compose.staging.yml` + `backend/staging.env.example`: a throwaway local stack (Postgres on tmpfs, one-shot migrate job, api, ai, web) to prove the images start and talk to each other. Not for production.
+* `.github/workflows/ci.yml`: lint, typecheck, unit + integration tests (Postgres service container; the AI contract test runs against a Python venv), migration drift check, builds, `npm audit` / `pip-audit`, and a no-push image build. It uses no secrets and never deploys.
+* Browser end-to-end checks (real Chrome, a scratch `*_qa` database): `frontend/e2e/README.md`.
+* The production procedure, backup/restore/rollback, alerts and smoke tests: **[RUNBOOK.md](RUNBOOK.md)**. What was verified and what blocks launch: **[AUDIT.md](AUDIT.md)**.
+
 ## Google OAuth setup (Google Cloud console)
 
 1. APIs & Services -> OAuth consent screen: choose External, set app name and support email, add scopes `openid`, `email`, `profile`. While in "Testing", add your Google account as a test user.
@@ -106,7 +122,8 @@ for the sender domain. Until SMTP is configured, users cannot verify their email
 - Set `TRUSTED_PROXIES` to the addresses of proxies **in front of the backend** whose forwarded chain should be skipped (CDN/LB ranges). If your single proxy appends the client IP and is the direct peer, set a placeholder such as `127.0.0.1` so the right-to-left walk is enabled. The backend refuses to start without it.
 - Set `TRUST_PROXY` to the number of proxy hops.
 - Run `npx prisma migrate deploy` (never `migrate dev`/`reset`) during release, after reviewing new migration SQL, against a backed-up database.
-- Rate limiting for non-auth routes is per-instance memory; use Redis if you scale out.
+- Rate limiting and the per-user creation caps for non-auth routes are per-instance memory; run one API instance or add a shared store before scaling out.
+- Block `/api/v1/internal/` at the public proxy (the AI service reaches it over the private network); health probes: `/api/v1/health/live` (liveness) and `/api/v1/health/ready` (readiness).
 - Grant the first admin with `npm run admin:grant` from a trusted machine.
 - Serve the web app and API on the **same site** (same origin recommended).
 - Payments: leave every `*_IS_LIVE` at `false` until the sandbox checklist in [PAYMENTS.md](PAYMENTS.md) is done; `/api/v1/payments/callbacks/*` and `/api/v1/payments/ipn/sslcommerz` must be reachable by providers over https **without** a login wall or WAF challenge, while every other route stays protected; register the IPN URL in the SSLCOMMERZ panel; keep credentials in a secret manager, never in git.

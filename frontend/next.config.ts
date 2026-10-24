@@ -7,7 +7,36 @@ import type { NextConfig } from "next";
  */
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
 
+const isDev = process.env.NODE_ENV !== "production";
+
+/**
+ * Content-Security-Policy. Everything is same-origin: fonts are self-hosted by
+ * next/font, there are no third-party scripts, images or API calls, and payment
+ * providers are reached only by top-level navigation (which CSP does not block).
+ * 'unsafe-inline' for scripts is required by Next's inline bootstrap scripts
+ * unless a per-request nonce is used (which would make every page dynamic and
+ * defeat Cache Components); it is acceptable here because no user content is
+ * ever rendered as HTML (see docs/SECURITY.md). Dev additionally needs eval + websockets for HMR.
+ * `upgrade-insecure-requests` is deliberately NOT set: it breaks a production build served over plain
+ * http (local or staging without TLS; observed as ERR_SSL_PROTOCOL_ERROR). Production forces https with
+ * the proxy's redirect plus Strict-Transport-Security below.
+ */
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const nextConfig: NextConfig = {
+  // The container image sets NEXT_OUTPUT=standalone; local `next start` is unaffected.
+  ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
@@ -35,6 +64,10 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Content-Security-Policy", value: CSP },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          // Only meaningful over HTTPS; browsers ignore it on plain http.
+          ...(isDev ? [] : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]),
         ],
       },
     ];

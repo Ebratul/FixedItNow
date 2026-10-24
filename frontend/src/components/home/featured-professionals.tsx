@@ -42,7 +42,7 @@ export async function FeaturedProfessionals() {
           ) : (
             <EmptyState
               icon={UserSearch}
-              title="Professional profiles are coming soon"
+              title="No professionals are listed yet"
               action={
                 <LinkButton href="/become-a-worker" variant="secondary">
                   Learn about joining as a professional

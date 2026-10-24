@@ -7,14 +7,14 @@ import { LinkButton } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "How it works",
   description:
-    "See how FixedItNow is designed to help you search for, compare, and book trusted service professionals in Bangladesh.",
+    "See how to search for, compare, and book trusted service professionals in Bangladesh on FixedItNow.",
 };
 
 const STATUS: Record<string, { label: string; tone: "success" | "warning" }> = {
-  "Search for a service": { label: "Preview available", tone: "success" },
-  "Compare professionals": { label: "Coming soon", tone: "warning" },
-  "Request or book": { label: "Coming soon", tone: "warning" },
-  "Complete and review": { label: "Coming soon", tone: "warning" },
+  "Search for a service": { label: "Available", tone: "success" },
+  "Compare professionals": { label: "Available", tone: "success" },
+  "Request or book": { label: "Available", tone: "success" },
+  "Complete and review": { label: "Available", tone: "success" },
 };
 
 export default function HowItWorksPage() {
@@ -23,7 +23,7 @@ export default function HowItWorksPage() {
       <PageHeader
         crumbs={[{ label: "Home", href: "/" }, { label: "How it works" }]}
         title="How FixedItNow works"
-        description="The customer journey we are building, and where each step stands today."
+        description="The customer journey from search to review. In-app messaging and notifications are not available yet."
       />
       <section className="section-y" aria-label="Steps">
         <div className="container-page">

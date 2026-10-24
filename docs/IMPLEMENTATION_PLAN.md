@@ -206,3 +206,29 @@ Design, policies, state machines, API and limits: [COMMUNITY.md](COMMUNITY.md). 
 - Backend: typecheck, lint, 125 unit tests, 489 integration tests (real PostgreSQL), build, `npm audit` (0), `prisma migrate diff` no drift, migration applied to an empty database. Frontend: lint, typecheck, 158 tests, build, `npm audit` (0). Python (Step 8) regression: 123 tests.
 - Mutation checks: 19/20 caught, 1 equivalent mutant (see COMMUNITY.md).
 - Real Chrome pass: 35 page x width combinations clean; 8 flows passed. Not done: keyboard-only and screen-reader walkthroughs, load testing.
+
+## Step 10: final audit, end-to-end testing, performance, deployment readiness - done; verdict: ready for staging, NOT ready for production {#step-10}
+
+Findings register, feature-status matrix, measurements and launch blockers: [AUDIT.md](AUDIT.md). Operations (deploy, migrate, back up, restore, roll back, alerts, incidents, smoke tests): [RUNBOOK.md](RUNBOOK.md). Migration `20261028000000_step10_audit_log_integrity` (additive; **not applied to any shared or production database**).
+
+| Capability | Status |
+| --- | --- |
+| Default-deny route audit, IDOR/mass-assignment/payment-bypass/duplicate/AI-adversarial journeys (API level, real PostgreSQL) | **Implemented and verified** |
+| Request ids, JSON access log, safe error handling, liveness/readiness, admin ops status, DB pool and timeout limits | **Implemented and verified** |
+| Append-only `audit_log` (trigger) | **Implemented and verified** on disposable databases; production application needs authorization |
+| CSP/COOP/HSTS on the web app; stale UI copy corrected | **Implemented and verified in real Chrome** |
+| Performance: community feed and proposal counts scoped to the page | **Measured** (109 -> 9 ms; 25 -> 5 ms) |
+| Dockerfiles (api runtime + migrate, web, ai), disposable staging stack, GitHub Actions CI | **Built and run locally** (containers healthy, API <-> AI over the network); **CI never executed on GitHub** |
+| Browser e2e suite (`frontend/e2e`) | **Implemented and run** (35 page x width combinations clean; 12 UI flows passed; 26-page crawl clean) |
+| Messaging, notifications, scheduler, Terms/Privacy, account deletion, identity documents, monitoring stack | **Not implemented** (launch blockers or decisions; see AUDIT.md) |
+| bKash, SSLCOMMERZ, Google OAuth, SMTP, OpenRouter against the real services | **Not verified: blocked on credentials** |
+
+### Verification performed
+- Backend: typecheck, lint, 128 unit tests, **517 integration tests** on real PostgreSQL (28 new this step: route audit, journeys A-D, ops, audit integrity), build, `npm audit` (0), `prisma migrate diff` no drift; migrations applied to an empty database and to a populated one; backup/restore rehearsal.
+- Frontend: lint, typecheck, 158 tests, production build, `npm audit` (0). AI service: ruff, mypy, 123 tests, `pip-audit` clean.
+- Secrets: gitleaks over 7 commits and the working tree, no real leaks.
+- Mutation checks (this step): making a route public, leaking the error message, logging the full URL, and disabling the audit trigger each fail a test.
+- Real Chrome (production build, scratch database): 7 pages x 5 widths with no overflow and no axe violations; 12 UI flows passed (booking request through the UI, professional accepts, review, community, proposals, moderation, access denial, no messaging UI); 26-page crawl with no dead links or CSP violations.
+- Containers: api, ai, web and the migrate job built from the new Dockerfiles and run together in a disposable compose stack; health checks passed; non-root; no secret in any log; stack and images removed afterwards.
+- **Not done:** CI on GitHub; any provider call; load/concurrency testing; Lighthouse; keyboard-only and screen-reader passes; third-party penetration test; production anything.
+

@@ -124,6 +124,18 @@ Full model and policies: [COMMUNITY.md](COMMUNITY.md). Controls (each has a test
 - **Finding during implementation:** the first admin queue response included the content author's internal account id; found by a response-scan test and removed.
 - **Not done:** CAPTCHA, spam/profanity filtering, per-user read limits, a separate moderator role, moderation notifications, shared-store rate limits for multi-instance deployments.
 
+## Step 10 audit (final hardening)
+
+Findings, severities, evidence and the launch blockers: [AUDIT.md](AUDIT.md). Controls added or verified in this step:
+- **Default deny is now a test**: `test/route-audit.e2e-spec.ts` walks the live router and requires `401` for every route outside a reviewed public list; admin/service routes refuse an ordinary session; no CORS allowance is granted; security headers present. Making a controller public by mistake fails it.
+- **Audit log is append-only at the database** (migration `20261028000000_step10_audit_log_integrity`): UPDATE/DELETE are rejected except the foreign key's detach-actor on user deletion. TRUNCATE is not intercepted: give the application a DML-only database role.
+- **Safe error handling and logging:** unexpected errors return a generic 500 with a request id; the server logs only the error class, code and five stack frames (never the message, which can embed query data); body-parser 4xx errors keep their status with fixed text. One JSON access-log line per request records the route template, never query strings (provider callbacks carry tokens there), bodies, cookies or ids.
+- **Web hardening:** Content-Security-Policy (same-origin only; `frame-ancestors 'none'`, `object-src 'none'`), `Cross-Origin-Opener-Policy`, HSTS in production. `script-src 'unsafe-inline'` remains because Next's bootstrap scripts need it without a per-request nonce; acceptable because user content is only ever rendered as text.
+- **Resource limits:** explicit database pool size, connect timeout and statement timeout; bounded SMTP timeouts.
+- **Secrets:** gitleaks over the whole history and tree found nothing real; `npm audit` (both apps) and `pip-audit` report no vulnerabilities.
+- **Honest UI:** stale copy claiming features were unavailable (or available, for messaging) was corrected.
+- **Still open:** no real-provider verification (payments, OAuth, SMTP, OpenRouter), no messaging/notifications, no scheduler, per-process rate-limit counters, no Terms/Privacy, no account deletion, no third-party penetration test.
+
 ## Account-linking policy
 
 Google sign-in **never** auto-merges into an existing account because the email

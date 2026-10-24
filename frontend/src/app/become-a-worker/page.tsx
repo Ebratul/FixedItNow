@@ -14,12 +14,14 @@ const AVAILABLE_NOW = [
   "Create an account and set up a worker profile with your skills, experience, and service areas.",
   "List the services you offer with a pricing model and base price.",
   "Submit your profile for review. A reviewer approves it, asks for changes, or declines it.",
+  "Once approved, publish your profile so customers can find it, and set your working hours to receive booking requests.",
+  "Accept requests, send quotes, and receive customer reviews after completed jobs.",
 ];
 
 const COMING_LATER = [
   "Identity document verification and the public Verified badge.",
-  "Public worker listings and search.",
-  "Availability, booking requests, messaging, and payments.",
+  "In-app messaging and notifications.",
+  "Payouts to professionals: customers pay FixedItNow's provider account; paying out to professionals is not built yet."
 ];
 
 export default function BecomeAWorkerPage() {
@@ -28,7 +30,7 @@ export default function BecomeAWorkerPage() {
       <PageHeader
         crumbs={[{ label: "Home", href: "/" }, { label: "Become a worker" }]}
         title="Grow your service business"
-        description="You can set up a worker profile today. Public listings and bookings come in later releases."
+        description="Set up a worker profile, get it reviewed, publish it, and start receiving booking requests."
       >
         <div className="mt-6 flex flex-wrap gap-3">
           <LinkButton href="/onboarding/worker" size="lg">
