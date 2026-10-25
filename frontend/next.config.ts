@@ -67,6 +67,8 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
+      // Internal endpoints are for the AI service only (private network / service token); never proxy them publicly.
+      { source: "/api/v1/internal/:path*", destination: "/blocked-internal" },
       { source: "/api/v1/:path*", destination: `${BACKEND_URL}/api/v1/:path*` },
     ];
   },

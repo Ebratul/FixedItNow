@@ -3,6 +3,13 @@ name = "fixeditnow-ai"
 version = "0.1.0"
 description = "FixedItNow AI service-discovery assistant (FastAPI)"
 requires-python = ">=3.12"
+# Mirrors requirements.txt (which the Dockerfile uses). Vercel's Python runtime installs from here.
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "httpx>=0.27,<1",
+  "pydantic>=2.7,<3",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
