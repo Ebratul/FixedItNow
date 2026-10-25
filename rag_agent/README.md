@@ -18,7 +18,8 @@ set -a; . ./.env; set +a; .venv/bin/python -m app
 .venv/bin/pytest -q && .venv/bin/ruff check . && .venv/bin/mypy
 .venv/bin/python -m evals.run_eval
 .venv/bin/python -m app.knowledge      # print the knowledge-base manifest
+.venv/bin/python -m app.vector_store check     # with PINECONE_* set: sync the knowledge to Pinecone and run one search
 ```
 
-The service has no database access and is never called by browsers. It starts without OpenRouter credentials
+The service has no database access (the optional Pinecone index holds only the public knowledge text) and is never called by browsers. It starts without OpenRouter credentials
 (rule-based "simple mode"). No real OpenRouter request has been made with this code.

@@ -27,7 +27,7 @@ def chat(client: TestClient, message="plumber in Sylhet", headers=AUTH, **extra)
 def test_health_is_public_and_leaks_nothing():
     with build()[0] as client:
         body = client.get("/health").json()
-    assert body == {"status": "ok", "llm": "not_configured", "knowledgeChunks": body["knowledgeChunks"]}
+    assert body == {"status": "ok", "llm": "not_configured", "knowledgeChunks": body["knowledgeChunks"], "vectorSearch": "not_configured"}
     assert AI_TOKEN not in json.dumps(body)
 
 

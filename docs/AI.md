@@ -165,6 +165,18 @@ OpenRouter is used through a provider-neutral interface (`app/llm/base.py`); the
 * Limits: matching is lexical and English. A Bangla policy question works only when the model rewrites it into English keywords (`knowledge_query`); in simple mode a Bangla policy question is not answered. The corpus describes current behaviour (for example "no cancellation fee is defined") and must be updated when the product changes.
 * Pre-existing inconsistency found, not changed: `frontend/src/lib/faqs.ts` still says bookings are "not available yet".
 
+## Pinecone vector search (optional)
+
+Keyword (BM25) retrieval stays, and Pinecone adds semantic retrieval next to it. Set `PINECONE_API_KEY` and `PINECONE_INDEX_HOST` in `rag_agent/.env` to turn it on; leave them empty and nothing changes.
+
+* **Index (you create it once, in the Pinecone console):** an integrated-embedding index, model `multilingual-e5-large` (it covers Bangla), field map text -> `chunk_text`, cosine. Copy the index **host**. Pinecone embeds text itself on write and on search, so there is no embedding code, no second provider and no extra key.
+* **Sync:** at start-up and after every admin "Sync now" (`POST /v1/knowledge/reload`), the service upserts every knowledge chunk (stable ids, batches of 96, text = title + heading + passage) into the namespace `PINECONE_NAMESPACE` and deletes ids that are no longer in the knowledge base. Re-running changes nothing. It touches only its own namespace.
+* **Search:** the question goes to Pinecone, which returns **only ids and scores**. The passage shown to users and given to the language model is always the local, validated chunk, so the index cannot inject text, and unknown (stale) ids are dropped. Hits below `PINECONE_MIN_SCORE` are ignored; the vector ranking is fused (reciprocal rank fusion) with the keyword ranking, whose "must cover the question's terms" gate is unchanged. A question neither ranker finds relevant still gets "not established" with no citation.
+* **Never a dependency:** if Pinecone is unreachable, slow (5 s limit), returns an error, or the index has not synced the current knowledge version, retrieval silently falls back to keyword-only. `GET /health` and `GET /v1/knowledge` show `vectorSearch: not_configured | synced | not_synced`; the per-request log line says `retrieval: hybrid | lexical | lexical_fallback`. The key never appears in logs, health or errors (a test checks).
+* **What leaves your system:** the public knowledge text (audience `public` only) at sync time, and the user's knowledge question at search time (after the safety screen has refused private-data requests). No worker, booking or account data.
+* **Limits:** in rule-based simple mode (no language model) a question is routed to the knowledge base only if keyword search recognises it, so a pure paraphrase reaches Pinecone only when the model is on. `PINECONE_MIN_SCORE=0.8` is an untested starting value. Pinecone is eventually consistent, so a chunk may take a few seconds to become searchable after a sync.
+* **Not verified:** all tests use a mock Pinecone. No request has reached the real service. Run `python -m app.vector_store check` once with your key and check the scores before relying on it.
+
 ## Rate limits, cost and limits
 
 | Control | Value |

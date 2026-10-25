@@ -37,6 +37,7 @@ class Metrics:
     completion_tokens: int = 0
     llm_error: str | None = None
     retrieval_ms: float = 0.0
+    retrieval: str | None = None  # "lexical" | "hybrid" | "lexical_fallback"
     tool_calls: int = 0
     tool_failures: int = 0
     validation_failures: int = 0
@@ -60,6 +61,7 @@ class Metrics:
             "completionTokens": self.completion_tokens or None,
             "llmError": self.llm_error,
             "retrievalMs": round(self.retrieval_ms),
+            "retrieval": self.retrieval,
             "toolCalls": self.tool_calls,
             "toolFailures": self.tool_failures,
             "validationFailures": self.validation_failures,

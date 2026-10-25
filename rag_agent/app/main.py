@@ -29,6 +29,7 @@ from app.marketplace import MarketplaceClient, MarketplaceError
 from app.obs import Metrics, configure_logging
 from app.pipeline import Pipeline
 from app.schemas import ChatRequest, ChatResponse
+from app.vector_store import PineconeStore, VectorError
 
 MAX_BODY_BYTES = 16 * 1024
 _CORRELATION = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -57,6 +58,17 @@ def create_app(
             return KnowledgeBase.from_documents(await marketplace.knowledge_documents())
         return KnowledgeBase.load(cfg.knowledge_dir)
 
+    async def sync_vectors(kb: KnowledgeBase) -> None:
+        """Push the knowledge base to Pinecone. A failure is logged (no secrets) and retrieval stays lexical."""
+        store: PineconeStore | None = state.get("vectors")
+        if store is None:
+            return
+        try:
+            report = await store.sync(kb)
+            log.info("Pinecone sync ok: %d upserted, %d deleted", report.upserted, report.deleted)
+        except VectorError as error:
+            log.warning("Pinecone sync failed (%s): using lexical retrieval", error)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         client = http or httpx.AsyncClient()
@@ -73,7 +85,10 @@ def create_app(
                 # The bundled files keep the assistant useful until an administrator syncs.
                 log.warning("Admin-managed knowledge could not be loaded: using the bundled files for now")
         state["marketplace"] = marketplace
-        state["pipeline"] = Pipeline(model, marketplace, state["knowledge"], cfg.max_results)
+        vectors = PineconeStore(cfg, client) if cfg.pinecone_configured else None
+        state["vectors"] = vectors
+        state["pipeline"] = Pipeline(model, marketplace, state["knowledge"], cfg.max_results, vectors)
+        await sync_vectors(state["knowledge"])
         state["llm"] = model
         try:
             yield
@@ -119,11 +134,18 @@ def create_app(
             "status": "ok",
             "llm": "configured" if state.get("llm") is not None else "not_configured",
             "knowledgeChunks": len(state["knowledge"].chunks),
+            "vectorSearch": vector_state(),
         }
+
+    def vector_state() -> str:
+        store: PineconeStore | None = state.get("vectors")
+        if store is None:
+            return "not_configured"
+        return "synced" if store.status.synced_digest == state["knowledge"].digest else "not_synced"
 
     def knowledge_summary() -> dict[str, object]:
         kb: KnowledgeBase = state["knowledge"]
-        return {"source": kb.source, "documents": len({c.doc_id for c in kb.chunks}), "chunks": len(kb.chunks), "digest": kb.digest}
+        return {"source": kb.source, "documents": len({c.doc_id for c in kb.chunks}), "chunks": len(kb.chunks), "digest": kb.digest, "vectorSearch": vector_state()}
 
     @app.get("/v1/knowledge", dependencies=[Depends(require_service)])
     async def knowledge_status() -> dict[str, object]:
@@ -141,6 +163,7 @@ def create_app(
                 return _error(502, "KNOWLEDGE_UNAVAILABLE", "The knowledge source could not be read or was not valid. The previous knowledge is still in use.")
             state["knowledge"] = fresh
             state["pipeline"].knowledge = fresh
+            await sync_vectors(fresh)
         return {**knowledge_summary(), "configuredSource": cfg.knowledge_source}
 
     @app.post("/v1/chat", response_model=ChatResponse, response_model_by_alias=True, dependencies=[Depends(require_service)])

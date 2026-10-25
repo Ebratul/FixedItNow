@@ -7,6 +7,7 @@ secret cannot leak through an error message or a log line.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
@@ -49,6 +50,20 @@ class Settings(BaseModel):
     # "files": knowledge/*.md shipped with the service. "api": documents managed by administrators in the
     # main API (published only); the files are the fallback if the API cannot be reached at start-up.
     knowledge_source: Literal["files", "api"] = "files"
+
+    # Optional Pinecone vector retrieval (an integrated-embedding index). Both the key and the host, or neither.
+    pinecone_api_key: SecretStr | None = None
+    pinecone_index_host: str | None = None
+    pinecone_namespace: str = "fixeditnow-knowledge"
+    pinecone_api_version: str = "2025-10"
+    pinecone_text_field: str = "chunk_text"
+    pinecone_top_k: int = 6
+    pinecone_min_score: float = 0.8
+    pinecone_timeout_seconds: float = 5.0
+
+    @property
+    def pinecone_configured(self) -> bool:
+        return self.pinecone_api_key is not None and self.pinecone_index_host is not None
 
     @property
     def llm_configured(self) -> bool:
@@ -151,6 +166,38 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     knowledge = _clean(source, "AI_KNOWLEDGE_DIR")
     knowledge_dir = Path(knowledge) if knowledge else Path(__file__).resolve().parent.parent / "knowledge"
 
+    pc_key = _clean(source, "PINECONE_API_KEY")
+    pc_host = _clean(source, "PINECONE_INDEX_HOST")
+    if bool(pc_key) != bool(pc_host):
+        errors.append("Set both PINECONE_API_KEY and PINECONE_INDEX_HOST, or neither")
+    if pc_host:
+        if "://" not in pc_host:
+            pc_host = f"https://{pc_host}"  # the console shows the bare host name
+        _http_url(pc_host, "PINECONE_INDEX_HOST", errors, https_only=True, allow_loopback_http=app_env != "production")
+    pc_namespace = _clean(source, "PINECONE_NAMESPACE") or "fixeditnow-knowledge"
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", pc_namespace):
+        errors.append("PINECONE_NAMESPACE must be 1-64 letters, digits, '-' or '_'")
+        pc_namespace = "fixeditnow-knowledge"
+    pc_field = _clean(source, "PINECONE_TEXT_FIELD") or "chunk_text"
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", pc_field):
+        errors.append("PINECONE_TEXT_FIELD must be a plain field name")
+        pc_field = "chunk_text"
+    pc_version = _clean(source, "PINECONE_API_VERSION") or "2025-10"
+    if not re.fullmatch(r"\d{4}-\d{2}", pc_version):
+        errors.append("PINECONE_API_VERSION must look like 2025-10")
+        pc_version = "2025-10"
+    pc_score = 0.8
+    raw_score = _clean(source, "PINECONE_MIN_SCORE")
+    if raw_score is not None:
+        try:
+            pc_score = float(raw_score)
+        except ValueError:
+            errors.append("PINECONE_MIN_SCORE must be a number")
+        else:
+            if not 0 <= pc_score <= 1:
+                errors.append("PINECONE_MIN_SCORE must be between 0 and 1")
+                pc_score = 0.8
+
     settings_kwargs = {
         "app_env": app_env,
         "host": _clean(source, "AI_HOST") or "127.0.0.1",
@@ -171,6 +218,13 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         "max_concurrent_requests": _int(source, "AI_MAX_CONCURRENT_REQUESTS", 8, 1, 100, errors),
         "knowledge_dir": knowledge_dir,
         "knowledge_source": knowledge_source,
+        "pinecone_api_key": SecretStr(pc_key) if pc_key else None,
+        "pinecone_index_host": pc_host.rstrip("/") if pc_host else None,
+        "pinecone_namespace": pc_namespace,
+        "pinecone_api_version": pc_version,
+        "pinecone_text_field": pc_field,
+        "pinecone_top_k": _int(source, "PINECONE_TOP_K", 6, 1, 20, errors),
+        "pinecone_min_score": pc_score,
     }
     if errors:
         raise ConfigError("Invalid AI service configuration:\n" + "\n".join(f"  - {e}" for e in errors))

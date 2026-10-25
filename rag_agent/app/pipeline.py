@@ -46,6 +46,7 @@ from app.schemas import (
     SourceRef,
 )
 from app.text import detect_language, normalize
+from app.vector_store import PineconeStore, VectorError, fuse
 
 RELAXABLE: tuple[FieldName, ...] = ("max_budget_bdt", "min_experience_years", "location")
 _POLICY_WORDS = re.compile(
@@ -61,6 +62,7 @@ class Pipeline:
     marketplace: MarketplaceClient
     knowledge: KnowledgeBase
     max_results: int = 5
+    vectors: PineconeStore | None = None
 
     async def handle(self, request: ChatRequest, metrics: Metrics) -> ChatResponse:
         text = normalize(request.message)
@@ -239,7 +241,7 @@ class Pipeline:
     ) -> ChatResponse:
         query = extraction.knowledge_query or text
         started = time.perf_counter()
-        hits = self.knowledge.search(query)
+        hits = await self._retrieve(query, metrics)
         metrics.retrieval_ms += (time.perf_counter() - started) * 1000
         if not hits:
             return self._unanswered(lang, prior, metrics, notes)
@@ -263,6 +265,24 @@ class Pipeline:
         if metrics.mode == "simple":
             notes.append("SIMPLE_MODE")
         return self._respond("answer", chosen.text, lang, prior, metrics, notes=notes, answer=answer)
+
+    async def _retrieve(self, query: str, metrics: Metrics) -> list[Hit]:
+        """Lexical ranking always; fused with Pinecone's vector ranking when it is configured and in sync.
+        Any Pinecone problem falls back to lexical alone: the answer is never blocked by the cloud index."""
+        lexical = self.knowledge.search(query)
+        metrics.retrieval = "lexical"
+        if self.vectors is None:
+            return lexical
+        try:
+            vector = await self.vectors.search(query, self.knowledge, limit=3)
+        except VectorError:
+            metrics.retrieval = "lexical_fallback"
+            return lexical
+        if self.vectors.status.synced_digest != self.knowledge.digest:
+            metrics.retrieval = "lexical_fallback"  # not synced for this knowledge version
+            return lexical
+        metrics.retrieval = "hybrid"
+        return fuse(lexical, vector, limit=3)
 
     def _unanswered(self, lang: Lang, prior: Intent, metrics: Metrics, notes: list[Note]) -> ChatResponse:
         text = messages.not_established(lang)
