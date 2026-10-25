@@ -48,9 +48,11 @@ export async function api<T>(
   for (const error of body.errors ?? []) {
     if (error.path && !(error.path in fieldErrors)) fieldErrors[error.path] = error.message;
   }
+  const code = typeof body.code === "string" ? body.code : undefined;
   throw new ApiError(
     response.status,
-    messageFor(response.status, body.message),
+    // Deliberate platform decisions and named business rules (e.g. SELF_ACTION) carry text meant for the user.
+    (code === "MAINTENANCE" || code === "ACCOUNT_SUSPENDED" || (response.status === 403 && code && code !== "PERMISSION_DENIED")) && typeof body.message === "string" ? body.message : messageFor(response.status, body.message),
     fieldErrors,
     typeof body.code === "string" ? body.code : undefined,
   );

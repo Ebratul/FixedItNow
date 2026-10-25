@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, Heart, LogOut, Receipt, UserRound } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown, Heart, LifeBuoy, LogOut, Receipt, ShieldCheck, UserRound } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { LinkButton } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/cn";
 import { AUTH_LINKS } from "@/lib/site";
 import { useDismiss } from "@/lib/use-dismiss";
+import { useMe } from "@/lib/use-api";
 
 /**
  * Header account area. Reflects the session for convenience only; it grants no
@@ -49,7 +51,8 @@ export function UserMenu() {
   }
 
   return (
-    <div ref={rootRef} className="relative hidden sm:block">
+    <div ref={rootRef} className="relative hidden items-center gap-1 sm:flex">
+      <NotificationBell />
       <button
         type="button"
         aria-expanded={open}
@@ -99,6 +102,23 @@ export function UserMenu() {
             <Heart className="size-4 text-brand-600" aria-hidden />
             Favorites
           </Link>
+          <Link
+            href="/account/notifications"
+            onClick={close}
+            className="flex min-h-11 items-center gap-3 rounded-control px-3 text-sm font-medium text-ink hover:bg-brand-50"
+          >
+            <Bell className="size-4 text-brand-600" aria-hidden />
+            Notifications
+          </Link>
+          <Link
+            href="/account/support"
+            onClick={close}
+            className="flex min-h-11 items-center gap-3 rounded-control px-3 text-sm font-medium text-ink hover:bg-brand-50"
+          >
+            <LifeBuoy className="size-4 text-brand-600" aria-hidden />
+            Support
+          </Link>
+          <AdminPanelLink onNavigate={close} />
           <button
             type="button"
             onClick={logOut}
@@ -111,5 +131,21 @@ export function UserMenu() {
         </div>
       )}
     </div>
+  );
+}
+
+/** "Admin panel" entry for administrators. Mounted only while the menu is open for a signed-in user, so /me is fetched then. */
+function AdminPanelLink({ onNavigate }: { onNavigate: () => void }) {
+  const { state } = useMe();
+  if (state.status !== "ready" || !state.data.isAdmin) return null;
+  return (
+    <Link
+      href="/admin"
+      onClick={onNavigate}
+      className="flex min-h-11 items-center gap-3 rounded-control px-3 text-sm font-medium text-ink hover:bg-brand-50"
+    >
+      <ShieldCheck className="size-4 text-brand-600" aria-hidden />
+      Admin panel
+    </Link>
   );
 }

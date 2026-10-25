@@ -46,6 +46,9 @@ class Settings(BaseModel):
     max_concurrent_requests: int = 8
 
     knowledge_dir: Path
+    # "files": knowledge/*.md shipped with the service. "api": documents managed by administrators in the
+    # main API (published only); the files are the fallback if the API cannot be reached at start-up.
+    knowledge_source: Literal["files", "api"] = "files"
 
     @property
     def llm_configured(self) -> bool:
@@ -140,6 +143,11 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
                 errors.append("AI_REQUEST_TIMEOUT_SECONDS must be between 1 and 120")
                 timeout = 30.0
 
+    knowledge_source = _clean(source, "AI_KNOWLEDGE_SOURCE") or "files"
+    if knowledge_source not in ("files", "api"):
+        errors.append("AI_KNOWLEDGE_SOURCE must be files or api")
+        knowledge_source = "files"
+
     knowledge = _clean(source, "AI_KNOWLEDGE_DIR")
     knowledge_dir = Path(knowledge) if knowledge else Path(__file__).resolve().parent.parent / "knowledge"
 
@@ -162,6 +170,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         "max_results": _int(source, "AI_MAX_RESULTS", 5, 1, 10, errors),
         "max_concurrent_requests": _int(source, "AI_MAX_CONCURRENT_REQUESTS", 8, 1, 100, errors),
         "knowledge_dir": knowledge_dir,
+        "knowledge_source": knowledge_source,
     }
     if errors:
         raise ConfigError("Invalid AI service configuration:\n" + "\n".join(f"  - {e}" for e in errors))

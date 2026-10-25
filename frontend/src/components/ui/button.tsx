@@ -3,18 +3,23 @@ import { Loader2 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-export type ButtonVariant = "primary" | "accent" | "secondary" | "ghost";
+export type ButtonVariant = "primary" | "accent" | "secondary" | "ghost" | "light";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-control font-semibold whitespace-nowrap transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-control font-semibold whitespace-nowrap transition-[color,background-color,border-color,box-shadow] duration-150 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900",
-  accent: "bg-accent-700 text-white hover:bg-accent-800 active:bg-accent-900",
+  primary:
+    "bg-brand-700 text-white shadow-card hover:bg-brand-800 hover:shadow-lift active:bg-brand-900",
+  accent:
+    "bg-accent-700 text-white shadow-card hover:bg-accent-800 hover:shadow-lift active:bg-accent-900",
   secondary:
     "border border-line-strong bg-canvas text-ink hover:border-brand-300 hover:bg-brand-50",
   ghost: "text-ink-muted hover:bg-surface-strong hover:text-ink",
+  /** White button for dark or strongly coloured backgrounds. */
+  light:
+    "bg-white text-brand-900 shadow-lift hover:bg-accent-50 active:bg-accent-100",
 };
 
 const sizes: Record<ButtonSize, string> = {

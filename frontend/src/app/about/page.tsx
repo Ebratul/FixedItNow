@@ -18,7 +18,7 @@ const PRINCIPLES = [
   },
   {
     title: "Built for Bangladesh",
-    text: "Local service categories, local payment options, and support for both English and Bangla.",
+    text: "Local service categories, bKash payment support, and an assistant that understands questions in English and Bangla.",
   },
 ];
 

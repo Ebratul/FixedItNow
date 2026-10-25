@@ -2,7 +2,7 @@ export type PaymentStatus =
   | "PENDING" | "INITIATED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED"
   | "REQUIRES_REVIEW" | "PARTIALLY_REFUNDED" | "REFUNDED";
 
-export type ProviderId = "BKASH" | "SSLCOMMERZ";
+export type ProviderId = "BKASH";
 
 export type RefundStatus = "REQUESTED" | "APPROVED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "REJECTED";
 

@@ -34,7 +34,7 @@ Browser --(same origin)--> Next.js web app (:3000)
   `worker` (onboarding + approved-worker workspace), `admin` (review queue), `health`.
 
 ## Data model (Prisma, `backend/prisma/schema.prisma`)
-- Better Auth core: `user`, `session`, `account`, `verification`, `rateLimit`. `user.role` (`USER`|`ADMIN`) is DB-only.
+- Better Auth core: `user`, `session`, `account`, `verification`, `rateLimit`. `user.role` (`USER`|`ADMIN`) is DB-only. Email verification uses the Better Auth `emailOTP` plugin (6-digit hashed code); per-address send throttles reuse `verification` rows, so no extra table. Details: [AUTH.md](AUTH.md).
 - `customer_profile` (1:1 with user), `worker_profile` (1:1 with user), `worker_service`
   (worker x category with pricing), `service_category` (seeded), `audit_log`.
 - **One account, both capabilities:** capabilities are *rows*, not roles: having a `customer_profile`
@@ -84,7 +84,7 @@ Details: [BOOKINGS.md](BOOKINGS.md). Summary of the architecture:
 ## Payments (Step 6)
 Details: [PAYMENTS.md](PAYMENTS.md). Summary:
 - **Module:** `backend/src/payments/` (`PaymentsService`, `PaymentCallbacksService`, `RefundsService`, three controllers, provider adapters under `providers/`). It does not import the bookings module;
-  booking detail uses the pure `paymentSummary()` query. Payment never changes a booking's status.
+  booking detail uses the pure `paymentSummary()` query. A verified payment is the only thing that moves a finished booking (`COMPLETION_PENDING`) to `COMPLETED`; it changes no other booking status.
 - **Provider boundary:** adapters (`BkashAdapter`, `SslcommerzAdapter`) implement `PaymentProviderAdapter`: protocol only, no database, neutral results. One injectable `HttpClient` is the only network access (a fake replaces it in tests).
 - **One verification path:** every callback, poll and admin reconcile ends in `PaymentsService.applyVerification`, a single transaction (booking lock -> payment lock) that compares the provider's report with the stored attempt.
 - **Ledger:** `payment_event` (append-only trigger, `dedupeKey` uniqueness). Money is integer BDT; provider decimals are parsed exactly (`money.ts`).
@@ -101,7 +101,7 @@ Details: [RUNBOOK.md](RUNBOOK.md), [AUDIT.md](AUDIT.md). Summary:
 ## Reviews, community and moderation (Step 9)
 Details: [COMMUNITY.md](COMMUNITY.md). Summary:
 - **Modules:** `reviews/` (booking-linked reviews, `ratings.ts` = the one definition of a counted review), `community/` (posts, comments, likes, reports; also hosts the proposals and moderation controllers), `proposals/`, `moderation/` (admin API). Reviews are not a dependency of bookings: the booking detail calls the pure `reviewSummary()` query, like payments.
-- **Ratings are computed, not cached:** one grouped query per page of workers (`ratingSummaries`), counting reviews that are `VISIBLE` and whose booking is `COMPLETED`. `WorkersService`, `FavoritesService` and the AI assistant's hydration all go through `toCard(row, summary)`.
+- **Ratings are computed, not cached:** one grouped query per page of workers (`ratingSummaries`), counting reviews that are `VISIBLE` and whose booking is `COMPLETED` with a verified payment. `WorkersService`, `FavoritesService` and the AI assistant's hydration all go through `toCard(row, summary)`.
 - **One authority for privileged actions:** `ModerationService`. Every state change is a conditional `UPDATE ... WHERE status = <read>` in a transaction together with its `audit_log` row; content visibility and report status are separate and linked only by an explicit `contentAction`.
 - **Plain text only** for all user content; the web app renders it as React text. Community, proposals and admin pages are signed-in and `noindex`; reviews on public profiles are public.
 - **Database invariants** (migration SQL): rating range, text lengths, hidden-needs-reason, report-has-exactly-one-matching-target, unique review/reaction/vote/report.

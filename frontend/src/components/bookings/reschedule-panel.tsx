@@ -13,7 +13,7 @@ import { SlotPicker } from "./slot-picker";
 
 const TONES: Record<RescheduleRequest["status"], BadgeTone> = { PENDING: "warning", ACCEPTED: "success", REJECTED: "neutral", WITHDRAWN: "neutral", EXPIRED: "neutral" };
 
-export function RescheduleCard({ request, viewer, onAccept, onReject, onWithdraw }: { request: RescheduleRequest; viewer: string; onAccept: () => void; onReject: () => void; onWithdraw: () => void }) {
+export function RescheduleCard({ request, viewer, onAccept, onReject, onWithdraw, withdrawing = false }: { request: RescheduleRequest; viewer: string; onAccept: () => void; onReject: () => void; onWithdraw: () => void; withdrawing?: boolean }) {
   const mine = request.requestedByRole === viewer;
   return (
     <Card className="p-4">
@@ -27,7 +27,7 @@ export function RescheduleCard({ request, viewer, onAccept, onReject, onWithdraw
       <div className="mt-3 flex flex-wrap gap-3">
         {request.actions.includes("accept") && <Button variant="accent" onClick={onAccept}>Accept new time</Button>}
         {request.actions.includes("reject") && <Button variant="secondary" onClick={onReject}>Decline</Button>}
-        {request.actions.includes("withdraw") && <Button variant="secondary" onClick={onWithdraw}>Withdraw request</Button>}
+        {request.actions.includes("withdraw") && <Button variant="secondary" onClick={onWithdraw} loading={withdrawing}>Withdraw request</Button>}
       </div>
     </Card>
   );

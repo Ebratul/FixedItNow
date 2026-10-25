@@ -24,8 +24,10 @@ _THIRD_PARTY = re.compile(
     r"(ওয়ার্কার|কাস্টমার|ইউজার|প্লাম্বার|ইলেকট্রিশিয়ান|অ্যাডমিন)(র|ের|এর))",
     _I,
 )
+# Workers are public listings ("show me all workers in Sylhet" is an ordinary search); their private
+# fields are caught by _PRIVATE_TERM + _THIRD_PARTY above.
 _OTHER_PEOPLE = re.compile(
-    r"(other|another|someone else'?s?|all|every|list of)\s+(customer|user|worker|booking|payment|account)s?",
+    r"(other|another|someone else'?s?|all|every|list of)\s+(customer|user|booking|payment|account)s?",
     _I,
 )
 _SYSTEM_PROBE = re.compile(
@@ -34,8 +36,11 @@ _SYSTEM_PROBE = re.compile(
     _I,
 )
 _SQL_SHELL = re.compile(
-    r"(\bselect\b.+\bfrom\b|\bdrop\s+table\b|\bdelete\s+from\b|\binsert\s+into\b|\bunion\s+select\b|"
-    r"\bupdate\b.+\bset\b|;\s*--|\brm\s+-rf\b|\bsudo\b|\bcurl\s+https?://|\bchmod\b|/etc/passwd|"
+    # "select an electrician from Dhaka" / "update my plan and set a budget" are ordinary sentences, so a
+    # SELECT or UPDATE only counts when it has SQL shape (select *, a clause keyword, or col = value).
+    r"(\bselect\s+\*|\bselect\b[^.?!\n]{0,80}\bfrom\s+[\w\".`]+\s*(where\b|join\b|limit\b|order\s+by\b|group\s+by\b|;|--)|"
+    r"\bdrop\s+table\b|\bdelete\s+from\b|\binsert\s+into\b|\bunion\s+select\b|"
+    r"\bupdate\s+[\w\".`]+\s+set\s+[\w\".`]+\s*=|;\s*--|\brm\s+-rf\b|\bsudo\b|\bcurl\s+https?://|\bchmod\b|/etc/passwd|"
     r"\bexec(ute)?\s+(sql|query|command|shell))",
     _I,
 )

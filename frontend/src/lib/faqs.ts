@@ -30,6 +30,6 @@ export const FAQS: Faq[] = [
   {
     question: "Which payment methods are supported?",
     answer:
-      "bKash and SSLCOMMERZ, when the platform has enabled them. The checkout page shows which methods are available and marks a method as unavailable if it is not configured. A payment is recorded as successful only after we verify it directly with the provider. Paying is optional for confirming a booking; refunds for cancelled bookings are reviewed by our team.",
+      "bKash, when the platform has enabled it. The checkout page shows which methods are available and marks it as unavailable if it is not configured. A payment is recorded as successful only after we verify it directly with the provider. You pay after the professional reports the work finished; the booking is marked completed only once the payment is verified, and only then can you leave a review. Refunds for cancelled bookings are reviewed by our team.",
   },
 ];

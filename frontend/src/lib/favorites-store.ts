@@ -61,7 +61,9 @@ const subscribe = (listener: () => void) => {
   return () => listeners.delete(listener);
 };
 const getSnapshot = () => state;
-const getServerSnapshot = (): State => ({ status: "idle" });
+// Must be a stable reference: useSyncExternalStore compares snapshots with Object.is.
+const SERVER_STATE: State = { status: "idle" };
+const getServerSnapshot = (): State => SERVER_STATE;
 
 export function useFavoritesState() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

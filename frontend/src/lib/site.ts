@@ -40,7 +40,11 @@ export const FOOTER_GROUPS: { title: string; links: NavLink[] }[] = [
   },
   {
     title: "Professionals",
-    links: [{ href: "/become-a-worker", label: "Become a worker" }],
+    links: [
+      { href: "/become-a-worker", label: "Become a worker" },
+      { href: "/register", label: "Create an account" },
+      { href: "/login", label: "Log in" },
+    ],
   },
   {
     title: "Company",

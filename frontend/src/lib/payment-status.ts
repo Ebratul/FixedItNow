@@ -1,7 +1,7 @@
 import type { BadgeTone } from "@/components/ui/badge";
 import type { PaymentStatus, PaymentView, ProviderId, RefundStatus } from "./payment-types";
 
-export const PROVIDER_LABELS: Record<ProviderId, string> = { BKASH: "bKash", SSLCOMMERZ: "SSLCOMMERZ" };
+export const PROVIDER_LABELS: Record<ProviderId, string> = { BKASH: "bKash" };
 
 /** Statuses where the outcome is still being decided: the page keeps asking the server. */
 export const OPEN_STATUSES: readonly PaymentStatus[] = ["PENDING", "INITIATED", "PROCESSING"];

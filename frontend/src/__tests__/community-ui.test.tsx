@@ -27,12 +27,14 @@ vi.mock("@/lib/use-api", () => ({
 
 import { ApiError } from "@/lib/api";
 import { ModerationView } from "@/components/admin/moderation-view";
+import { AdminProvider } from "@/components/admin/shell/admin-context";
 import { PostView } from "@/components/community/post-view";
 import { ProposalsView } from "@/components/community/proposals";
 import { ReportButton } from "@/components/community/report-button";
 import { ReviewPanel } from "@/components/reviews/review-panel";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import type { BookingReview, Post } from "@/lib/community";
+import type { Me } from "@/lib/use-api";
 
 const page = { page: 1, pageSize: 10, total: 1, totalPages: 1 };
 const own = (over: object = {}) => ({
@@ -219,11 +221,29 @@ describe("moderation console", () => {
   const overview = { reports: { open: 1, reviewing: 0, openByType: { POST: 1, COMMENT: 0, REVIEW: 0, PROPOSAL: 0 } }, proposals: { submitted: 2, needsReview: 1, voteThreshold: 10 }, hidden: { posts: 0, comments: 0, reviews: 0, proposals: 0 }, visible: { reviews: 3, posts: 4 } };
   const target = { type: "POST", id: "p1", status: "VISIBLE", author: "Asha", title: "Cheap deal", text: "call me", truncated: false };
 
-  it("tells non-admins they have no access without calling any admin API", () => {
-    isAdmin = false;
-    render(<ModerationView />);
-    expect(screen.getByText("Administrators only")).toBeInTheDocument();
+  const adminMe = (permissions: string[]) =>
+    ({ user: { id: "a1", name: "Admin", email: "a@x.test", emailVerified: true, image: null }, isAdmin: true, admin: { role: { key: "mod", name: "Moderator" }, permissions }, customer: { onboarded: false }, worker: { started: false, approved: false } }) as Me;
+  const renderModeration = (permissions = ["moderation.read", "moderation.manage"]) => render(<AdminProvider me={adminMe(permissions)}><ModerationView /></AdminProvider>);
+
+  it("tells a role without moderation access so, without calling any admin API", () => {
+    renderModeration(["support.read"]);
+    expect(screen.getByText("Your role cannot open this page")).toBeInTheDocument();
     expect(api).not.toHaveBeenCalled();
+    expect(screen.queryByText("Open reports")).not.toBeInTheDocument();
+  });
+
+  it("hides every decision button from a read-only role", async () => {
+    data["/admin/moderation/overview"] = overview;
+    data["/admin/reports/r1"] = {
+      report: { id: "r1", status: "OPEN", reason: "SPAM", details: null, createdAt: "2026-11-01T06:00:00Z", resolvedAt: null, decisionNote: null, decidedBy: null, reporter: { displayName: "Rina" }, target, otherReports: [] },
+      history: [],
+    };
+    data["/admin/reports"] = { ...page, reports: [{ id: "r1", status: "OPEN", reason: "SPAM", details: null, createdAt: "2026-11-01T06:00:00Z", reportsOnThisItem: 1, target }] };
+    renderModeration(["moderation.read"]);
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(await screen.findByText("Rina")).toBeInTheDocument();
+    expect(screen.getByText(/can read reports but not decide/)).toBeInTheDocument();
+    for (const name of ["Resolve…", "Dismiss…", "Start reviewing", "Hide content…"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
   });
 
   it("requires a note, resolves without touching content unless chosen, and sends the explicit content action", async () => {
@@ -234,7 +254,7 @@ describe("moderation console", () => {
     };
     data["/admin/reports"] = { ...page, reports: [{ id: "r1", status: "OPEN", reason: "SPAM", details: "ad", createdAt: "2026-11-01T06:00:00Z", reportsOnThisItem: 1, target }] };
     api.mockResolvedValue({ report: { id: "r1", status: "ACTIONED" } });
-    render(<ModerationView />);
+    renderModeration();
     expect(screen.getByText("Open reports")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
     expect(await screen.findByText("Rina")).toBeInTheDocument();
@@ -257,7 +277,7 @@ describe("moderation console", () => {
     };
     data["/admin/reports"] = { ...page, reports: [{ id: "r1", status: "REVIEWING", reason: "SPAM", details: null, createdAt: "2026-11-01T06:00:00Z", reportsOnThisItem: 1, target }] };
     api.mockResolvedValue({ report: { id: "r1", status: "DISMISSED" } });
-    render(<ModerationView />);
+    renderModeration();
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
     fireEvent.click(await screen.findByRole("button", { name: "Dismiss…" }));
     const confirm = screen.getByRole("button", { name: "Dismiss report", hidden: true });

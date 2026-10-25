@@ -8,6 +8,11 @@ easy to test. Revisit when the corpus is large or needs cross-language recall.
 files (stable chunk ids, content hash), so repeating it can never create
 duplicates, and a changed or deleted file is reflected on the next start.
 Only documents marked `audience: public` are indexed.
+
+A second source exists for admin-managed content: `KnowledgeBase.from_documents` builds the same
+index from documents served by the main API (`AI_KNOWLEDGE_SOURCE=api`). The API only ever sends
+PUBLISHED documents; every field is validated again here (id, title, url, size), so a bad document
+makes the reload fail and the previous index stays in use.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ import hashlib
 import math
 import re
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,11 +129,40 @@ def _pieces(content: str) -> list[str]:
     return pieces
 
 
+def _chunks_for(doc_id: str, title: str, url: str, body: str) -> list[Chunk]:
+    """Split one document into chunks with stable, unique ids."""
+    chunks: list[Chunk] = []
+    used: set[str] = set()
+    for heading, content in _split_sections(body):
+        for index, piece in enumerate(_pieces(content)):
+            base = f"{doc_id}#{_slug(heading)}" + (f"-{index + 1}" if index else "")
+            chunk_id = base
+            n = 2
+            while chunk_id in used:
+                chunk_id = f"{base}~{n}"
+                n += 1
+            used.add(chunk_id)
+            chunks.append(Chunk(chunk_id, doc_id, title, heading, url, piece))
+    return chunks
+
+
+def documents_digest(docs: Sequence[Mapping[str, str]]) -> str:
+    """Content hash of a document set, independent of order. The main API computes the same value
+    (sha256 over `id NUL title NUL url NUL body NUL` per document, sorted by id, UTF-8), which is how
+    an administrator can see whether the running index matches what is published."""
+    digest = hashlib.sha256()
+    for doc in sorted(docs, key=lambda d: d["id"]):
+        for field in ("id", "title", "url", "body"):
+            digest.update(doc[field].encode("utf-8") + b"\0")
+    return digest.hexdigest()
+
+
 class KnowledgeBase:
-    def __init__(self, chunks: list[Chunk], skipped: int, digest: str) -> None:
+    def __init__(self, chunks: list[Chunk], skipped: int, digest: str, source: str = "files") -> None:
         self.chunks = chunks
         self.skipped = skipped
         self.digest = digest
+        self.source = source
         self._tokens = [Counter(tokenize(f"{c.title} {c.heading} {c.text}")) for c in chunks]
         self._lengths = [sum(t.values()) for t in self._tokens]
         self._avg = (sum(self._lengths) / len(self._lengths)) if self._lengths else 0.0
@@ -156,21 +191,29 @@ class KnowledgeBase:
             if doc_id in seen_docs:
                 raise KnowledgeError(f"{path.name}: duplicate document id")
             seen_docs.add(doc_id)
-            used: set[str] = set()
-            for heading, content in _split_sections(body):
-                for index, piece in enumerate(_pieces(content)):
-                    base = f"{doc_id}#{_slug(heading)}" + (f"-{index + 1}" if index else "")
-                    chunk_id = base
-                    n = 2
-                    while chunk_id in used:
-                        chunk_id = f"{base}~{n}"
-                        n += 1
-                    used.add(chunk_id)
-                    chunks.append(Chunk(chunk_id, doc_id, title, heading, url, piece))
+            chunks.extend(_chunks_for(doc_id, title, url, body))
         return cls(chunks, skipped, digest.hexdigest())
+
+    @classmethod
+    def from_documents(cls, docs: Sequence[Mapping[str, str]]) -> KnowledgeBase:
+        """Build the index from documents delivered by the main API (already limited to PUBLISHED)."""
+        chunks: list[Chunk] = []
+        seen: set[str] = set()
+        for doc in docs:
+            doc_id, title, url, body = (doc.get(k, "") for k in ("id", "title", "url", "body"))
+            if not ID_PATTERN.match(doc_id) or not title or not URL_PATTERN.match(url) or not body.strip():
+                raise KnowledgeError("document has an invalid id, title, url or body")
+            if len(body.encode("utf-8")) > MAX_FILE_BYTES:
+                raise KnowledgeError(f"{doc_id}: document too large")
+            if doc_id in seen:
+                raise KnowledgeError(f"{doc_id}: duplicate document id")
+            seen.add(doc_id)
+            chunks.extend(_chunks_for(doc_id, title, url, body))
+        return cls(chunks, 0, documents_digest(docs), "api")
 
     def manifest(self) -> dict[str, object]:
         return {
+            "source": self.source,
             "digest": self.digest,
             "documents": len({c.doc_id for c in self.chunks}),
             "chunks": [c.id for c in self.chunks],

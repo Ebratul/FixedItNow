@@ -1,7 +1,8 @@
 // Seeds a DISPOSABLE scratch database through the real HTTP API (via the Next rewrite) so the browser run sees real data.
 // Needs: the stack from e2e/README.md, `psql` on PATH, and QA_DATABASE_URL pointing at the SCRATCH database
-// (two things are done directly in SQL because they cannot be done through the API: marking the test accounts'
-// email verified, and moving bookings to COMPLETED, which in real life needs the appointment time to pass).
+// (things done directly in SQL because they cannot be done through the API: marking the test accounts'
+// email verified, and moving three bookings to COMPLETED WITH A SIMULATED VERIFIED PAYMENT row, which in real life needs
+// the appointment time to pass and a real bKash payment. Those rows are test fixtures, not evidence about bKash.)
 // It refuses to run unless the database name ends in _qa.
 import { execFileSync } from "node:child_process";
 const BASE = process.env.QA_BASE ?? "http://localhost:3101";
@@ -44,7 +45,8 @@ const ok = (r, what) => { if (r.status >= 300) throw new Error(`${what}: ${r.sta
 
 const out = {};
 const admin = await user("qa-admin@example.com", "Admin Alam");
-PSQL(`UPDATE "user" SET role='ADMIN' WHERE email='qa-admin@example.com'`);
+// an ADMIN needs a role to have any permission: the system role super_admin comes from the migration
+PSQL(`UPDATE "user" SET role='ADMIN', "adminRoleId"=(SELECT id FROM admin_role WHERE key='super_admin') WHERE email='qa-admin@example.com'`);
 const cust1 = await user("qa-asha@example.com", "Asha Rahman");
 const cust2 = await user("qa-karim@example.com", "Karim Mia");
 const cust3 = await user("qa-bina@example.com", "Bina Das");
@@ -64,7 +66,10 @@ for (const [i, cust] of [cust1, cust2, cust3].entries()) {
   const start = new Date(Date.now() + (3 + i) * 86_400_000); start.setUTCHours(4, 0, 0, 0); // 10:00 Dhaka
   const b = ok(await cust.c.call("POST", "/bookings", { workerId: profileId, categorySlug: "electrical", description: "Ceiling fan is noisy and slow.", serviceArea: "Dhaka", serviceAddress: "House 12, Road 5, Dhanmondi", startAt: start.toISOString(), durationMinutes: 60 }), "booking");
   ok(await worker.c.call("POST", `/bookings/${b.booking.id}/accept`, {}), "accept");
-  PSQL(`UPDATE booking SET status='COMPLETED', "completedAt"=now() WHERE id='${b.booking.id}'`);
+  PSQL(`UPDATE booking SET status='COMPLETED', "completedAt"=(now() AT TIME ZONE 'UTC') WHERE id='${b.booking.id}'`);
+  // A SIMULATED verified payment, so the review rule ("completed AND paid") is satisfied. Scratch database only.
+  PSQL(`INSERT INTO payment (id, reference, "bookingId", "customerId", provider, status, "amountBdt", "providerPaymentId", "providerTransactionId", "succeededAt", "updatedAt")
+        SELECT gen_random_uuid()::text, 'FINQA' || substr(md5(id), 1, 20), id, "customerId", 'BKASH', 'SUCCEEDED', "agreedAmountBdt", 'QA-' || id, 'QATRX-' || id, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC' FROM booking WHERE id='${b.booking.id}'`);
   bookings.push(b.booking.id);
 }
 out.bookings = bookings;

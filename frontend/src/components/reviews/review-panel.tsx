@@ -68,7 +68,7 @@ export function ReviewPanel({
         {!review ? (
           <ReviewForm
             bookingId={bookingId}
-            intro={`How was the job with ${workerName}? Your review is public and shows a “Verified booking” label.`}
+            intro={`How was the job with ${workerName}? You can review because your payment was verified. Your review is public and shows a “Verified booking” label.`}
             onSaved={(r) => set(r, "Thank you. Your review is now public on their profile.")}
           />
         ) : editing ? (

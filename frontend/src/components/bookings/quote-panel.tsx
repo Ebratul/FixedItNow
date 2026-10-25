@@ -22,12 +22,14 @@ export function QuoteCard({
   onAccept,
   onReject,
   onWithdraw,
+  withdrawing = false,
 }: {
   quote: Quote;
   viewer: "CUSTOMER" | "WORKER";
   onAccept: () => void;
   onReject: () => void;
   onWithdraw: () => void;
+  withdrawing?: boolean;
 }) {
   return (
     <Card className="p-4">
@@ -49,7 +51,7 @@ export function QuoteCard({
       <div className="mt-3 flex flex-wrap gap-3">
         {quote.actions.includes("accept") && viewer === "CUSTOMER" && <Button variant="accent" onClick={onAccept}>Accept quote</Button>}
         {quote.actions.includes("reject") && viewer === "CUSTOMER" && <Button variant="secondary" onClick={onReject}>Reject</Button>}
-        {quote.actions.includes("withdraw") && viewer === "WORKER" && <Button variant="secondary" onClick={onWithdraw}>Withdraw</Button>}
+        {quote.actions.includes("withdraw") && viewer === "WORKER" && <Button variant="secondary" onClick={onWithdraw} loading={withdrawing}>Withdraw</Button>}
       </div>
     </Card>
   );
@@ -113,7 +115,7 @@ export function QuoteForm({ bookingId, revising, onDone, onCancel }: { bookingId
       <div className="mt-4 space-y-4">
         <TextArea id="q-desc" label="What does this price include?" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} error={errors.description} className="min-h-24" />
         <TextInput id="q-terms" label="Terms (optional)" value={terms} onChange={(e) => setTerms(e.target.value)} maxLength={1000} error={errors.terms} />
-        <SelectInput id="q-valid" label="Quote is valid for" placeholder="" options={[{ value: "24", label: "24 hours" }, { value: "48", label: "48 hours" }, { value: "72", label: "3 days" }, { value: "168", label: "7 days" }]} value={hours} onChange={(e) => setHours(e.target.value)} className="max-w-48" />
+        <SelectInput id="q-valid" label="Quote is valid for" placeholder={null} options={[{ value: "24", label: "24 hours" }, { value: "48", label: "48 hours" }, { value: "72", label: "3 days" }, { value: "168", label: "7 days" }]} value={hours} onChange={(e) => setHours(e.target.value)} className="max-w-48" />
       </div>
       {formError && <Alert tone="error" className="mt-4">{formError}</Alert>}
       <div className="mt-5 flex gap-3">

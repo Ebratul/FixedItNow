@@ -25,7 +25,7 @@ npm run dev                               # http://localhost:3000
 ```
 
 Open http://localhost:3000/register. With `MAIL_TRANSPORT=console` the
-verification/reset links are printed in the **backend terminal**.
+the 6-digit verification code and password-reset links are printed in the **backend terminal**.
 
 ### Making an admin
 ```bash
@@ -92,7 +92,7 @@ Backend: `AI_SERVICE_URL`, `AI_SERVICE_TOKEN` (**secret**), `APP_API_SERVICE_TOK
 
 ## Containers, CI and the disposable staging stack (Step 10)
 
-* `backend/Dockerfile` (targets `runtime` and `migrate`), `frontend/Dockerfile`, `rag_agent/Dockerfile`: non-root, health-checked images. The web image bakes `BACKEND_URL` into the `/api/v1/*` rewrite at build time (`--build-arg BACKEND_URL=...`) and sets `NEXT_OUTPUT=standalone` itself; plain `npm run build` / `npm start` are unchanged.
+* `backend/Dockerfile` (targets `runtime` and `migrate`), `frontend/Dockerfile`, `rag_agent/Dockerfile`: non-root, health-checked images. On Vercel the web build now **fails** if `BACKEND_URL` is unset or points at localhost (it would otherwise ship a site that cannot reach its API). The web image bakes `BACKEND_URL` into the `/api/v1/*` rewrite at build time (`--build-arg BACKEND_URL=...`) and sets `NEXT_OUTPUT=standalone` itself; plain `npm run build` / `npm start` are unchanged.
 * `backend/docker-compose.staging.yml` + `backend/staging.env.example`: a throwaway local stack (Postgres on tmpfs, one-shot migrate job, api, ai, web) to prove the images start and talk to each other. Not for production.
 * `.github/workflows/ci.yml`: lint, typecheck, unit + integration tests (Postgres service container; the AI contract test runs against a Python venv), migration drift check, builds, `npm audit` / `pip-audit`, and a no-push image build. It uses no secrets and never deploys.
 * Browser end-to-end checks (real Chrome, a scratch `*_qa` database): `frontend/e2e/README.md`.
@@ -113,7 +113,8 @@ The redirect URI uses the **web app's** origin because the web app proxies the c
 ## Email
 
 Production requires `MAIL_TRANSPORT=smtp` with a real provider (any SMTP service). Configure SPF/DKIM
-for the sender domain. Until SMTP is configured, users cannot verify their email and therefore cannot log in.
+for the sender domain. Until SMTP is configured, users cannot receive the verification code and therefore cannot log in with a password.
+Google sign-in does not need email. Full detail, including the Vercel setup: **[AUTH.md](AUTH.md)**.
 
 ## Production checklist
 

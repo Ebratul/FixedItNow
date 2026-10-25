@@ -146,3 +146,22 @@ export function payloadForStep(step: number, draft: WorkerDraft, nextStep: numbe
       return { serviceAreas: draft.serviceAreas, onboardingStep };
   }
 }
+
+/** A category a worker can pick: a parent, or a subcategory labelled "Parent › Child". */
+export type CategoryOption = { slug: string; name: string; description: string };
+type CategoryTreeNode = { slug: string; name: string; description: string; subcategories?: CategoryTreeNode[] };
+
+/**
+ * The public category list is two levels (parents with nested `subcategories`). The picker offers every
+ * parent AND every subcategory as its own choice, each child right after its parent. Order follows the API.
+ */
+export function flattenCategories(tree: readonly CategoryTreeNode[]): CategoryOption[] {
+  return tree.flatMap((parent) => [
+    { slug: parent.slug, name: parent.name, description: parent.description },
+    ...(parent.subcategories ?? []).map((child) => ({
+      slug: child.slug,
+      name: `${parent.name} › ${child.name}`,
+      description: child.description,
+    })),
+  ]);
+}

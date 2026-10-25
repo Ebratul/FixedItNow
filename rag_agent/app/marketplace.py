@@ -41,6 +41,20 @@ class CategoryRef(BaseModel):
     name: str
 
 
+class KnowledgeDocument(BaseModel):
+    """One published knowledge document as served by the main API. Validated again by KnowledgeBase."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=200)
+    url: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=64 * 1024)
+
+
+MAX_KNOWLEDGE_DOCUMENTS = 200
+
+
 class WorkerCard(BaseModel):
     """Only the public fields the pipeline needs. `verification` must be exactly
     VERIFIED: a card that says anything else fails validation and is dropped."""
@@ -122,6 +136,18 @@ class MarketplaceClient:
             raise MarketplaceError("invalid categories payload") from None
         self._categories = (now, parsed)
         return parsed
+
+    async def knowledge_documents(self) -> list[dict[str, str]]:
+        """Published knowledge documents (admin-managed). Any malformed payload fails the whole fetch,
+        so a half-valid set is never indexed."""
+        data = await self._get("knowledge")
+        try:
+            raw = data["documents"]
+            if not isinstance(raw, list) or len(raw) > MAX_KNOWLEDGE_DOCUMENTS:
+                raise ValueError
+            return [KnowledgeDocument.model_validate(item).model_dump() for item in raw]
+        except (KeyError, TypeError, ValueError, ValidationError):
+            raise MarketplaceError("invalid knowledge payload") from None
 
     async def search_workers(self, criteria: SearchCriteria) -> SearchResult:
         data = await self._get("workers", criteria.query())

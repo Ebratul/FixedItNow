@@ -2,7 +2,7 @@
 
 This document is the single description of how the booking domain works. The state machine lives in
 `backend/src/bookings/booking.state.ts` (bookings) and `dispute.state.ts` (disputes); everything below is
-what the code actually does. Bookings never move, hold or refund money by themselves: payment is a separate domain ([PAYMENTS.md](PAYMENTS.md), Step 6) that reads the agreed price and never changes a booking's lifecycle.
+what the code actually does. Bookings never move, hold or refund money by themselves: payment is a separate domain ([PAYMENTS.md](PAYMENTS.md)) that reads the agreed price. **Since the booking-to-payment-to-review workflow ([WORKFLOW.md](WORKFLOW.md)) the two meet in exactly one place:** a provider-verified payment is what moves a finished job (`COMPLETION_PENDING`) to `COMPLETED`.
 
 ## Concepts and data
 
@@ -32,7 +32,7 @@ what the code actually does. Bookings never move, hold or refund money by themse
 
 ```
                     +--decline--> DECLINED
-REQUESTED --quote--> QUOTED --accept quote--> CONFIRMED --start--> IN_PROGRESS --complete--> COMPLETION_PENDING --confirm--> COMPLETED
+REQUESTED --quote--> QUOTED --accept quote--> CONFIRMED --start--> IN_PROGRESS --complete--> COMPLETION_PENDING --verified payment--> COMPLETED
    |  ^  <--reject/withdraw quote--+              |                                                  |              |
    |  +--accept (fixed/hourly)---------------------+                                                  |              |
    +--cancel/expire--> CANCELLED / EXPIRED          +--cancel--> CANCELLED       open dispute (from IN_PROGRESS, COMPLETION_PENDING,
@@ -41,7 +41,7 @@ REQUESTED --quote--> QUOTED --accept quote--> CONFIRMED --start--> IN_PROGRESS -
                                                                                      DISPUTED --admin outcome / withdrawal--> COMPLETED | CANCELLED | previous status
 ```
 
-Deviations from the SRS sketch: no separate `ACCEPTED` (accepting confirms directly, because payment is not a gate: Step 6 kept it that way and lets the customer pay a confirmed booking), and `REJECTED` is named `DECLINED`.
+Deviations from the SRS sketch: no separate `ACCEPTED` (accepting confirms directly: payment is not a gate for *confirmation*; it is the gate for *completion* and reviews), and `REJECTED` is named `DECLINED`.
 
 | Action | Who | From | To |
 | --- | --- | --- | --- |
@@ -52,16 +52,20 @@ Deviations from the SRS sketch: no separate `ACCEPTED` (accepting confirms direc
 | reject quote | customer | QUOTED | REQUESTED |
 | accept quote | customer | QUOTED | CONFIRMED |
 | cancel | customer (REQUESTED/QUOTED/CONFIRMED), worker (CONFIRMED only) | | CANCELLED |
+| arrive | assigned worker (same window as start; once) | CONFIRMED | CONFIRMED (stamps `arrivedAt`; a self-reported milestone, **no location is checked**) |
 | start | worker (from 30 min before the start until 24 h after the end) | CONFIRMED | IN_PROGRESS |
-| complete | worker | IN_PROGRESS | COMPLETION_PENDING |
-| confirm completion | **customer** | COMPLETION_PENDING | COMPLETED |
+| complete | worker | IN_PROGRESS | COMPLETION_PENDING (**payment due**; nothing is paid or completed) |
+| mark finished (customer) | **customer** (any time after confirmation, e.g. early) | CONFIRMED, IN_PROGRESS | COMPLETION_PENDING (**payment due**, the same state the worker's report produces) |
+| payment verified | **system only**, from `PaymentsService` after the provider confirmed the payment | COMPLETION_PENDING | COMPLETED |
 | expire | system (lazy) | REQUESTED, QUOTED once the start time passes | EXPIRED |
 | open dispute | either participant | see above | DISPUTED |
 | dispute outcome | admin only | DISPUTED | COMPLETED / CANCELLED / previous |
 
 Everything else is a `409 INVALID_TRANSITION`. Terminal statuses (`CANCELLED`, `DECLINED`, `EXPIRED`) allow nothing; `COMPLETED` allows only a dispute.
-A customer cannot mark work complete, a worker cannot confirm their own work, and a `DISPUTED` booking can only leave that state through the dispute workflow.
+The old customer "confirm completion" action was **removed**: nobody can mark a booking completed by asking: the customer can only declare the work *finished* (payment due), never *completed*, and a `DISPUTED` booking can only leave that state through the dispute workflow.
 Every transition is a single conditional `UPDATE ... WHERE status = <status we read>` plus an event row in one transaction.
+
+**What the statuses mean for the paid workflow** (the product's names in brackets): `REQUESTED`/`QUOTED` [pending worker confirmation], `CONFIRMED` [confirmed; with `arrivedAt` set: worker arrived], `IN_PROGRESS` [work in progress], `COMPLETION_PENDING` [work completed, pending payment], `COMPLETED` [completed and paid; the one exception is a disputed job an administrator marked completed, which stays payable and is not reviewable until it is paid], `CANCELLED`/`DECLINED`/`EXPIRED`, `DISPUTED`. No new status value was added: arrival is a milestone on `CONFIRMED`, so the slot exclusion constraint and every existing rule keep working.
 
 ## Availability and conflict prevention
 
@@ -87,7 +91,7 @@ Accepting (customer only, one transaction): owns the booking; the quote belongs 
 
 Immediate and unilateral, recorded with actor, reason and time (`booking_event` + booking columns):
 
-* **Customer:** before confirmation (reason optional) or after (reason, >= 5 characters, required).
+* **Customer:** before confirmation (reason optional) or after (reason, >= 5 characters, required). Cancelling ends once the job has started; a paid job can only be cancelled by an administrator through a dispute.
 * **Worker:** only a `CONFIRMED` booking (reason required). Before confirmation they use **decline**.
 * **Nobody:** once the job has started (use a dispute), after completion, or when already closed. Repeated/parallel cancels produce exactly one event.
 * Cancelling releases the slot and closes pending quotes and reschedule requests.
@@ -115,4 +119,4 @@ Participants only; everyone else (strangers, other workers, admins on non-disput
 
 ## Not built in this step
 
-Notifications (no notification system exists; events are recorded for it), evidence uploads, an admin dashboard UI (API only), automatic completion after N days, scheduled expiry, travel/preparation buffers, per-service durations, recurring bookings.
+Email/SMS/push notifications (in-app notifications exist, see WORKFLOW.md), evidence uploads, an admin dashboard UI (API only), automatic completion after N days, scheduled expiry, travel/preparation buffers, per-service durations, recurring bookings.

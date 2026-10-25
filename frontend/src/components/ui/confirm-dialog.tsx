@@ -57,7 +57,7 @@ export function ConfirmDialog({
   }
 
   return (
-    <Dialog open={open} onClose={() => !pending && onClose()} title={title} variant="modal">
+    <Dialog open={open} onClose={() => !pending && onClose()} title={title} variant="modal" dismissible={!pending}>
       <div className="space-y-4 p-5">
         <div className="text-ink-muted">{children}</div>
         {mode !== "none" && (

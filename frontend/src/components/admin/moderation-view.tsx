@@ -2,7 +2,8 @@
 
 import { Inbox } from "lucide-react";
 import { useId, useState } from "react";
-import { AuthGate } from "@/components/account/auth-gate";
+import { AdminPage, buildQuery, useDebounced } from "@/components/admin/kit";
+import { useAdmin } from "@/components/admin/shell/admin-context";
 import { Alert } from "@/components/ui/alert";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { SearchInput } from "@/components/ui/search-input";
 import { SelectInput } from "@/components/ui/select-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TextArea } from "@/components/ui/text-area";
@@ -38,6 +40,7 @@ import { Pager } from "@/components/community/community-shell";
 const TABS = [
   { id: "reports", label: "Reports" },
   { id: "proposals", label: "Proposals" },
+  { id: "content", label: "Content" },
   { id: "history", label: "History" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
@@ -51,15 +54,13 @@ const STATUS_TONE: Record<ReportStatus, BadgeTone> = { OPEN: "warning", REVIEWIN
  */
 export function ModerationView() {
   return (
-    <AuthGate>
-      {(me) =>
-        me.isAdmin ? (
-          <Console />
-        ) : (
-          <Alert tone="error" title="Administrators only">This area is for FixedItNow administrators.</Alert>
-        )
-      }
-    </AuthGate>
+    <AdminPage
+      title="Moderation"
+      description="Review reports, decide feature proposals, browse community content, and see what moderators did. Every action is recorded."
+      permission="moderation.read"
+    >
+      <Console />
+    </AdminPage>
   );
 }
 
@@ -68,7 +69,7 @@ function Console() {
   return (
     <div className="space-y-6">
       <Overview />
-      <div role="tablist" aria-label="Moderation sections" className="flex gap-1 border-b border-line">
+      <div role="tablist" aria-label="Moderation sections" className="flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -86,6 +87,7 @@ function Console() {
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === "reports" && <Reports />}
         {tab === "proposals" && <Proposals />}
+        {tab === "content" && <ContentBrowser />}
         {tab === "history" && <History />}
       </div>
     </div>
@@ -190,6 +192,7 @@ function ReportRow({ row, expanded, onToggle, onChanged }: { row: AdminReportRow
 }
 
 function ReportDetail({ id, onChanged }: { id: string; onChanged: (message: string) => void }) {
+  const manage = useAdmin().can("moderation.manage");
   const { state, reload } = useApi<AdminReportDetail>(`/admin/reports/${id}`);
   const [dialog, setDialog] = useState<"resolve" | "dismiss" | "hide" | "restore" | null>(null);
   const [error, setError] = useState<string>();
@@ -235,16 +238,18 @@ function ReportDetail({ id, onChanged }: { id: string; onChanged: (message: stri
           </ul>
         </div>
       )}
-      {open ? (
+      {open && manage ? (
         <div className="flex flex-wrap gap-3">
           {report.status === "OPEN" && <Button variant="secondary" size="sm" onClick={startReview}>Start reviewing</Button>}
           <Button size="sm" onClick={() => setDialog("resolve")}>Resolve…</Button>
           <Button variant="secondary" size="sm" onClick={() => setDialog("dismiss")}>Dismiss…</Button>
         </div>
+      ) : open ? (
+        <p className="text-sm text-ink-subtle">Your role can read reports but not decide them.</p>
       ) : (
         <p className="text-sm text-ink-subtle">This report is closed{report.resolvedAt ? ` (${formatDateTime(report.resolvedAt)})` : ""}.</p>
       )}
-      {report.target.status !== "DELETED" && (
+      {manage && report.target.status !== "DELETED" && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-ink-subtle">Content is {report.target.status.toLowerCase()}.</span>
           {report.target.status === "VISIBLE" ? (
@@ -356,6 +361,7 @@ function Proposals() {
 }
 
 function ProposalRow({ proposal: p, onChanged }: { proposal: AdminProposal; onChanged: () => void }) {
+  const manage = useAdmin().can("moderation.manage");
   const [next, setNext] = useState<ProposalStatus | null>(null);
   const [hide, setHide] = useState(false);
   const [notice, setNotice] = useState<string>();
@@ -373,10 +379,10 @@ function ProposalRow({ proposal: p, onChanged }: { proposal: AdminProposal; onCh
       <p className="mt-1 whitespace-pre-line break-words text-sm text-ink-muted">{p.description}</p>
       {p.response && <p className="mt-2 text-sm"><span className="font-semibold">Response: </span>{p.response}</p>}
       {notice && <div className="mt-3"><Alert tone="success">{notice}</Alert></div>}
-      <div className="mt-3 flex flex-wrap gap-2">
+      {manage && <div className="mt-3 flex flex-wrap gap-2">
         {p.allowedNext.map((s) => <Button key={s} size="sm" variant="secondary" onClick={() => setNext(s)}>Move to {PROPOSAL_STATUS_LABELS[s].toLowerCase()}…</Button>)}
         {p.visibility !== "DELETED" && <Button size="sm" variant="ghost" onClick={() => setHide(true)}>{p.visibility === "VISIBLE" ? "Hide…" : "Restore…"}</Button>}
-      </div>
+      </div>}
       {next && (
         <ConfirmDialog open title={`Move to “${PROPOSAL_STATUS_LABELS[next]}”?`} confirmLabel={`Move to ${PROPOSAL_STATUS_LABELS[next].toLowerCase()}`} tone={next === "DECLINED" ? "danger" : "primary"}
           reason={next === "DECLINED" ? "required" : "optional"} minReasonLength={3} onClose={() => setNext(null)}
@@ -392,6 +398,113 @@ function ProposalRow({ proposal: p, onChanged }: { proposal: AdminProposal; onCh
         </ConfirmDialog>
       )}
     </Card>
+  );
+}
+
+// ------------------------------------------------------------------ content
+
+const CONTENT_TYPES = [
+  { value: "posts", label: "Posts" },
+  { value: "comments", label: "Comments" },
+  { value: "reviews", label: "Reviews" },
+  { value: "proposals", label: "Proposals" },
+] as const;
+type ContentKind = (typeof CONTENT_TYPES)[number]["value"];
+
+type ContentItem = {
+  type: "POST" | "COMMENT" | "REVIEW" | "PROPOSAL";
+  id: string;
+  status: "VISIBLE" | "HIDDEN" | "DELETED";
+  title?: string;
+  text: string;
+  truncated: boolean;
+  author: string;
+  createdAt: string;
+  openReports: number;
+  moderationReason: string | null;
+  rating?: number;
+  worker?: string;
+  votes?: number;
+  decision?: string;
+};
+type ContentList = { items: ContentItem[]; page: number; pageSize: number; total: number; totalPages: number };
+
+const VISIBILITY_TONE: Record<ContentItem["status"], BadgeTone> = { VISIBLE: "success", HIDDEN: "warning", DELETED: "neutral" };
+
+function ContentBrowser() {
+  const manage = useAdmin().can("moderation.manage");
+  const [kind, setKind] = useState<ContentKind>("posts");
+  const [status, setStatus] = useState("");
+  const [reported, setReported] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [notice, setNotice] = useState<string>();
+  const [target, setTarget] = useState<ContentItem | null>(null);
+  const q = useDebounced(search.trim());
+  const { state, reload, refresh, stale } = useApi<ContentList>(`/admin/content/${kind}${buildQuery({ status, reported: reported || undefined, q, page })}`);
+  const reset = (fn: () => void) => { fn(); setPage(1); setNotice(undefined); };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SelectInput id="content-type" label="Content type" placeholder={null} value={kind} onChange={(e) => reset(() => setKind(e.target.value as ContentKind))} options={CONTENT_TYPES.map((t) => ({ value: t.value, label: t.label }))} />
+        <SelectInput id="content-status" label="Visibility" placeholder="Any" value={status} onChange={(e) => reset(() => setStatus(e.target.value))} options={[{ value: "VISIBLE", label: "Visible" }, { value: "HIDDEN", label: "Hidden" }, { value: "DELETED", label: "Deleted" }]} />
+        <SearchInput id="content-search" label="Search" placeholder="Words in the text" value={search} onChange={(e) => reset(() => setSearch(e.target.value))} maxLength={100} />
+        <label className="flex min-h-11 items-center gap-2 self-end text-sm font-medium">
+          <input type="checkbox" checked={reported} onChange={(e) => reset(() => setReported(e.target.checked))} /> Only items with open reports
+        </label>
+      </div>
+      {notice && <Alert tone="success">{notice}</Alert>}
+      {state.status === "loading" || state.status === "unauthenticated" ? (
+        <Skeleton className="h-40" />
+      ) : state.status === "error" ? (
+        <ErrorState action={<Button onClick={reload}>Try again</Button>}>{state.message}</ErrorState>
+      ) : state.data.items.length === 0 ? (
+        <EmptyState icon={Inbox} title="Nothing here" headingLevel={3}>No content matches these filters.</EmptyState>
+      ) : (
+        <div className={stale ? "space-y-4 opacity-60" : "space-y-4"} aria-busy={stale || undefined}>
+          <p className="text-sm text-ink-subtle">{state.data.total} {state.data.total === 1 ? "item" : "items"}</p>
+          <ul className="space-y-3">
+            {state.data.items.map((item) => (
+              <li key={item.id}>
+                <Card className="p-4">
+                  <p className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge>{item.type.toLowerCase()}</Badge>
+                    <Badge tone={VISIBILITY_TONE[item.status]}>{item.status.toLowerCase()}</Badge>
+                    {item.decision && <Badge tone="brand">{PROPOSAL_STATUS_LABELS[item.decision as ProposalStatus] ?? item.decision.toLowerCase()}</Badge>}
+                    {item.openReports > 0 && <Badge tone="warning">{item.openReports} open report{item.openReports === 1 ? "" : "s"}</Badge>}
+                    {typeof item.rating === "number" && <span className="font-semibold">{item.rating}/5{item.worker ? ` for ${item.worker}` : ""}</span>}
+                    {typeof item.votes === "number" && <span className="font-semibold tabular-nums">{item.votes} votes</span>}
+                    <span className="text-ink-subtle">{item.author} · {formatDateTime(item.createdAt)}</span>
+                  </p>
+                  {item.title && <h3 className="mt-2 font-bold break-words">{item.title}</h3>}
+                  <p className="mt-1 text-sm whitespace-pre-line break-words text-ink-muted">{item.text || <em>(no text)</em>}{item.truncated ? " (shortened)" : ""}</p>
+                  {item.moderationReason && <p className="mt-2 text-sm"><span className="font-semibold">Moderation reason: </span>{item.moderationReason}</p>}
+                  {manage && item.status !== "DELETED" && (
+                    <div className="mt-3">
+                      <Button size="sm" variant="ghost" onClick={() => setTarget(item)}>{item.status === "VISIBLE" ? "Hide…" : "Restore…"}</Button>
+                    </div>
+                  )}
+                </Card>
+              </li>
+            ))}
+          </ul>
+          <Pager page={state.data.page} totalPages={state.data.totalPages} onPage={setPage} label="Content pages" />
+        </div>
+      )}
+      {target && (
+        <ConfirmDialog open title={target.status === "VISIBLE" ? `Hide this ${target.type.toLowerCase()}?` : `Restore this ${target.type.toLowerCase()}?`}
+          confirmLabel={target.status === "VISIBLE" ? "Hide" : "Restore"} tone={target.status === "VISIBLE" ? "danger" : "primary"} reason="required" minReasonLength={3}
+          onClose={() => setTarget(null)}
+          onConfirm={async (reason) => {
+            await api(`/admin/moderation/${kind}/${target.id}/visibility`, { method: "POST", body: { hidden: target.status === "VISIBLE", reason } });
+            setNotice(target.status === "VISIBLE" ? "Content hidden." : "Content restored.");
+            refresh();
+          }}>
+          {target.status === "VISIBLE" ? "It disappears for everyone except its author, who sees that it was removed. The text itself is not changed. You can restore it later." : "It becomes visible to everyone again."}
+        </ConfirmDialog>
+      )}
+    </div>
   );
 }
 

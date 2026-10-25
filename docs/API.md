@@ -16,9 +16,13 @@ Full list: Better Auth docs. The ones the web app uses:
 
 | Method & path | Purpose | Notes |
 | --- | --- | --- |
-| `POST /auth/sign-up/email` | Register `{ name, email, password, callbackURL? }` | Same `200` response whether or not the email exists; no session until verified. Password 10-128 chars. |
-| `GET /auth/verify-email?token&callbackURL` | Verify email | Redirects to `callbackURL` (must be same-origin) and starts a session. |
-| `POST /auth/send-verification-email` | Resend link `{ email, callbackURL }` | Same answer for unknown emails. Rate-limited. |
+| `POST /auth/sign-up/email` | Register `{ name, email, password }` | Same `200` response whether or not the email exists; no session until verified. Password 10-128 chars. A 6-digit code is emailed. |
+| `POST /auth/email-otp/verify-email` | Verify `{ email, otp, password }` | Success marks the email verified and starts a session. `password` is required (account-takeover guard). Wrong/expired/used code -> `400 INVALID_OTP` / `OTP_EXPIRED`; after 5 wrong guesses -> `TOO_MANY_ATTEMPTS`. 15 per 10 min per IP. |
+| `POST /auth/email-otp/send-verification-otp` | Send/resend `{ email, type: "email-verification" }` | Always `{ "success": true }`: unknown address, verified address, 60 s cooldown and 5/hour cap send nothing and say nothing. Other `type`s -> 400. 6 per 10 min per IP. |
+
+The link routes `/auth/verify-email` and `/auth/send-verification-email`, and the code routes for sign-in, password reset, email change and
+`check-verification-otp`, are disabled (404). See [AUTH.md](AUTH.md).
+
 | `POST /auth/sign-in/email` | Log in `{ email, password }` | `401` for wrong password **and** unknown email (identical); `403 EMAIL_NOT_VERIFIED` only after a correct password. |
 | `POST /auth/sign-in/social` | Start Google `{ provider: "google", callbackURL, ... }` | Returns Google URL (state + PKCE). Fails when Google is not configured. |
 | `GET /auth/callback/google` | OAuth callback | Validates state; on failure redirects to the error URL with `?error=`. |
@@ -134,7 +138,10 @@ Business-rule errors carry a stable `code` next to the message: `409` = wrong st
 | `POST /bookings/:id/decline` | assigned worker | `{ reason? }` |
 | `POST /bookings/:id/cancel` | participant | `{ reason? }`; reason required for confirmed bookings. |
 | `POST /bookings/:id/start`, `/complete` | assigned worker | |
-| `POST /bookings/:id/confirm-completion` | booking's customer | |
+| `POST /bookings/:id/mark-finished` | booking's customer | CONFIRMED or IN_PROGRESS -> COMPLETION_PENDING (payment due). Empty body only. |
+| `POST /bookings/:id/arrive` | assigned professional | CONFIRMED only, inside the start window, once (`409 ALREADY_ARRIVED`). Stamps `arrivedAt`; self-reported, no location accepted. |
+| `GET /bookings/:id/chat?before=<seq>` | booking's customer or assigned professional | Latest 100 messages, oldest first, `hasMore`. `409 CHAT_NOT_AVAILABLE` until the booking is accepted. |
+| `POST /bookings/:id/chat/messages` | same | `{ body 1-2000, clientMessageId 8-64 [A-Za-z0-9_-] }` (strict). `201` created, `200` replay of the same key, `409 IDEMPOTENCY_KEY_REUSED` / `CHAT_READ_ONLY` / `CHAT_NOT_AVAILABLE`, `422 CHAT_LIMIT_REACHED`. |
 | `POST /bookings/:id/quotes` | assigned worker | `{ laborBdt, materialsBdt?, otherBdt?, description, terms?, estimatedDurationMinutes?, validForHours? }`; `totalBdt` is rejected. |
 | `POST /bookings/:id/quotes/:quoteId/accept` | booking's customer | `{ expectedTotalBdt? }` |
 | `POST /bookings/:id/quotes/:quoteId/reject` | booking's customer | `{ reason? }` |
@@ -178,7 +185,7 @@ Design, schemas and safety rules: [AI.md](AI.md). All paths are under `/api/v1`.
 | --- | --- | --- |
 | `GET /health/live` | Public | `{ status: "ok" }`. No dependency checks (liveness). Not rate-limited. |
 | `GET /health`, `GET /health/ready` | Public | `{ status: "ok", checks: { database: "ok" } }`, or `503 { checks: { database: "unavailable" } }` after a 2 s database check. No versions, hosts or error text. |
-| `GET /admin/ops/status` | admin | `{ database, ai: { configured, reachable?, llm? }, payments: { bkash, sslcommerz: "not_configured"\|"sandbox"\|"live", refundsEnabled }, mail, queues: { paymentsRequiringReview, paymentsUnresolvedOver30Minutes, refundsAwaitingProvider, refundsAwaitingDecision, disputesOpen, reportsOpen } }`. Counts and flags only. |
+| `GET /admin/ops/status` | `ops.read` | `{ database, databaseLatencyMs, ai, payments, mail, integrations: [{ id, label, status, detail, probed }], queues: { ..., ticketsOpen, ticketsUnassigned }, audit: { headSeq, lastEntryAt }, platform: { maintenanceMode }, runtime }`. Counts, states and flags only; `probed: false` means "configuration present", not "verified with the provider". |
 
 Every response carries `X-Request-Id`. A client may send its own (8-64 characters of `A-Za-z0-9_-`; anything else is replaced). Unexpected errors answer `500 { statusCode, error, message: "Internal server error", requestId }`.
 
@@ -188,9 +195,9 @@ Full rules, state machines and error codes: [COMMUNITY.md](COMMUNITY.md). Summar
 
 | Method & path | Access | Notes |
 | --- | --- | --- |
-| `POST /bookings/:id/review` | the booking's customer | `{ rating 1-5, comment? <=1000 }`. Booking must be `COMPLETED` (`422 BOOKING_NOT_REVIEWABLE`); one per booking (`409 REVIEW_EXISTS`); someone else's booking is `404`. |
+| `POST /bookings/:id/review` | the booking's customer | `{ rating 1-5, comment? <=1000 }`. Booking must be `COMPLETED` (`422 BOOKING_NOT_REVIEWABLE`) with a provider-verified payment (`422 PAYMENT_NOT_VERIFIED`); one per booking (`409 REVIEW_EXISTS`); someone else's booking is `404`. |
 | `GET\|PUT\|DELETE /bookings/:id/review` | the booking's customer | Read own / edit within 14 days while visible (`422 EDIT_WINDOW_CLOSED`, `409 REVIEW_NOT_EDITABLE`) / withdraw (final). |
-| `GET /workers/:slug/reviews?page&pageSize` | Public | Counted reviews only (visible + booking completed) with `summary {rating, reviewCount, distribution}`; `verifiedBooking` is derived by the server; public first names only. |
+| `GET /workers/:slug/reviews?page&pageSize` | Public | Counted reviews only (visible + booking completed + payment verified) with `summary {rating, reviewCount, distribution}`; `verifiedBooking` is derived by the server; public first names only. |
 | `GET /bookings/:id` | participant | Adds `review` (customer: `{canReview, review}`; professional: a public review or null). |
 | `GET /workers`, `/workers/:slug`, `/me/favorites` | as before | `rating` (1 decimal) and `reviewCount` are now real; null/0 without reviews. |
 | `GET\|POST /community/posts`, `GET\|PATCH\|DELETE /community/posts/:id` | session | List `?scope=all\|mine`. Edit/delete: author only. 10 posts/hour/user. |
@@ -244,3 +251,26 @@ Unknown or malformed references redirect to `FRONTEND_ORIGIN/payments` without e
 | `POST /admin/refunds/:id/reconcile` | Re-query a `PROCESSING` refund. |
 
 No endpoint accepts a payment or refund status, an amount for a payment, a provider reference or a refunded total.
+
+
+## Admin panel (every route needs the permission shown; see [ADMIN.md](ADMIN.md))
+
+Every `/admin/*` route declares its permissions with `@RequirePermission`; a test fails if one does not. Mutations that move money, remove access or publish content need `"confirm": true` in the body and answer `400` without it. Errors use the usual shapes plus a stable `code` for business rules. Lists are paginated (`page`, `pageSize`, answer `total`, `totalPages`).
+
+| Area | Endpoints (permission) |
+| --- | --- |
+| Dashboard | `GET /admin/dashboard?days=7\|14\|30\|90` (`dashboard.view`; sections filtered by the caller's other permissions) |
+| Users | `GET /admin/users`, `GET /admin/users/:id` (`users.read`); `POST /admin/users/:id/suspension` `{ suspended, reason, confirm }` (`users.suspend`); `POST /admin/users/:id/admin-access` `{ roleId \| null, reason, confirm }` (`admins.assign`) |
+| Roles | `GET /admin/roles`, `/admin/roles/permissions`, `/admin/roles/:id` (`roles.read`); `POST /admin/roles`, `PATCH`/`DELETE /admin/roles/:id` (`roles.manage`; `DELETE` needs `{ confirmKey }`) |
+| Workers | `GET /admin/workers`, `/admin/workers/:id` (`workers.read`); `POST /admin/workers/:id/verification` (`workers.review`); `POST /admin/workers/:id/suspension` (`workers.suspend`); `GET /admin/workers/:id/documents/:kind` (`workers.documents.view`, audited, image bytes) |
+| Worker documents (owner) | `GET /me/worker-profile/documents` (metadata only); `PUT`/`DELETE /me/worker-profile/documents/:kind` (`PUT` body is the raw image, JPEG/PNG/WebP up to 3 MB) |
+| Catalogue | `GET /admin/categories` (`catalog.read`); `POST`, `PATCH /:id`, `PUT /order`, `DELETE /:id` `{ confirmSlug }` (`catalog.manage`). Public `GET /categories` returns top-level categories with nested `subcategories`. |
+| Bookings | `GET /admin/bookings`, `/admin/bookings/:id` (`bookings.read`); disputes unchanged (`disputes.read` / `disputes.manage`) |
+| Payments | `GET /admin/payments` (filters `status, provider, q, from, to`), `/admin/payments/:reference`, `/admin/refunds` (`payments.read`); reconcile (`payments.reconcile`); `POST /admin/payments/:reference/refunds` and `/admin/refunds/:id/approve` `{ confirm }` (`refunds.decide`); `POST /admin/refunds/:id/process` `{ confirm }` (`refunds.process`) |
+| Finance | `GET /admin/finance/summary`, `/commission`, `/commission/export` (CSV) (`finance.reports`; range at most 366 days) |
+| Support | user: `POST/GET /support/tickets`, `GET /support/tickets/:id`, `POST .../messages`, `POST .../close`; admin: `GET /admin/support/tickets`, `/:id`, `/assignees` (`support.read`), `POST /:id/messages`, `PATCH /:id` (`support.manage`) |
+| Content | `GET /admin/content/:posts\|comments\|reviews\|proposals` (`moderation.read`); hide/restore and report decisions as before (`moderation.manage`) |
+| AI | `GET /admin/ai/status`, `/admin/ai/knowledge[/:id[/revisions/:v]]` (`ai.read`); create/edit/status/revert/`POST /admin/ai/sync { confirm }` (`ai.manage`); service-only `GET /internal/ai/knowledge` (published documents, `APP_API_SERVICE_TOKEN`) |
+| Communication | `GET/POST /admin/announcements`, `PATCH /:id`, `POST /:id/publish { confirm }`, `POST /:id/archive`, `POST /admin/notifications` (`notifications.manage`); readers: `GET /announcements` (public), `GET /me/announcements`, `GET /notifications`, `/notifications/unread-count`, `POST /notifications/read-all`, `/notifications/:id/read` |
+| Audit | `GET /admin/audit`, `/actions`, `/export` (`audit.read`); `GET /admin/audit/verify` (`audit.verify`) |
+| Settings | `GET /admin/settings` (`settings.read`); `PUT /admin/settings/:key { value, reason }` (`settings.manage`); public `GET /config/platform` |

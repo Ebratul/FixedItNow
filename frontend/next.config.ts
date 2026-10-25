@@ -7,6 +7,23 @@ import type { NextConfig } from "next";
  */
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
 
+// The rewrite target is baked into the build. On Vercel a missing (or localhost) value would produce a site that
+// builds and deploys fine but cannot reach its API, so fail the build instead. `VERCEL` is set by Vercel builds only.
+if (process.env.VERCEL && process.env.NODE_ENV === "production") {
+  let host = "";
+  try {
+    host = new URL(BACKEND_URL).hostname;
+  } catch {
+    // handled below
+  }
+  if (!process.env.BACKEND_URL || !host || ["localhost", "127.0.0.1", "::1", "[::1]"].includes(host)) {
+    throw new Error(
+      "BACKEND_URL must be set to the public https URL of the API for Vercel builds (Project Settings -> Environment Variables); " +
+        "it is baked into the /api/v1 rewrite, so redeploy after changing it. See docs/AUTH.md and docs/DEPLOYMENT.md.",
+    );
+  }
+}
+
 const isDev = process.env.NODE_ENV !== "production";
 
 /**

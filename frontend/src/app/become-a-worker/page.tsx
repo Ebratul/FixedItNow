@@ -15,12 +15,13 @@ const AVAILABLE_NOW = [
   "List the services you offer with a pricing model and base price.",
   "Submit your profile for review. A reviewer approves it, asks for changes, or declines it.",
   "Once approved, publish your profile so customers can find it, and set your working hours to receive booking requests.",
-  "Accept requests, send quotes, and receive customer reviews after completed jobs.",
+  "Accept requests, send quotes, and chat with the customer once you accept. Tell the customer you have arrived (your own report; your location is not checked), then mark the work finished so they can pay.",
+  "Receive reviews after a job is completed and its payment has been verified.",
 ];
 
 const COMING_LATER = [
   "Identity document verification and the public Verified badge.",
-  "In-app messaging and notifications.",
+  "Email and SMS notifications (alerts are shown inside the app only).",
   "Payouts to professionals: customers pay FixedItNow's provider account; paying out to professionals is not built yet."
 ];
 

@@ -31,6 +31,8 @@ function Loader({ reference }: { reference: string }) {
   const [data, setData] = useState<PaymentDetail>();
   const [error, setError] = useState<string>();
   const [gaveUp, setGaveUp] = useState(false);
+  // Bumped after EVERY attempt, successful or not, so a failed poll still schedules the next one.
+  const [attempts, setAttempts] = useState(0);
   const polls = useRef(0);
   const returned = useSearchParams().get("returned") === "1";
 
@@ -40,6 +42,8 @@ function Loader({ reference }: { reference: string }) {
       setError(undefined);
     } catch (e) {
       setError(e instanceof ApiError && e.status === 404 ? "NOT_FOUND" : e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setAttempts((n) => n + 1);
     }
   }, [reference]);
 
@@ -61,17 +65,17 @@ function Loader({ reference }: { reference: string }) {
       void load();
     }, POLL_MS);
     return () => clearTimeout(timer);
-  }, [status, data, load]);
+  }, [status, data, attempts, load]);
 
   if (error === "NOT_FOUND") {
     return <EmptyState icon={Receipt} headingLevel={1} title="Payment not found" action={<LinkButton href="/payments">Your payments</LinkButton>}>This payment does not exist, or it belongs to someone else.</EmptyState>;
   }
   if (error && !data) return <ErrorState action={<Button onClick={load}>Try again</Button>}>{error}</ErrorState>;
   if (!data) return <div aria-busy="true" aria-label="Loading payment" className="space-y-4"><Skeleton className="h-10 w-1/2" /><Skeleton className="h-48" /></div>;
-  return <Detail data={data} reload={load} returned={returned} gaveUp={gaveUp} />;
+  return <Detail data={data} reload={load} returned={returned} gaveUp={gaveUp} refreshFailed={Boolean(error)} />;
 }
 
-export function Detail({ data, reload, returned, gaveUp = false }: { data: PaymentDetail; reload: () => void | Promise<void>; returned: boolean; gaveUp?: boolean }) {
+export function Detail({ data, reload, returned, gaveUp = false, refreshFailed = false }: { data: PaymentDetail; reload: () => void | Promise<void>; returned: boolean; gaveUp?: boolean; refreshFailed?: boolean }) {
   const { payment } = data;
   const copy = describePayment(payment);
   const open = isOpen(payment.status);
@@ -89,10 +93,11 @@ export function Detail({ data, reload, returned, gaveUp = false }: { data: Payme
 
       <div role="status" aria-live="polite" className="space-y-3">
         <Alert tone={copy.alert} title={copy.headline}>{copy.message}</Alert>
-        {returned && open && !gaveUp && <p className="text-sm text-ink-muted">Checking with the payment provider…</p>}
+        {refreshFailed && open && <Alert tone="warning">We could not refresh this payment just now. The last status shown may be out of date; we will keep trying.</Alert>}
+        {returned && open && !gaveUp && !refreshFailed && <p className="text-sm text-ink-muted">Checking with the payment provider…</p>}
         {open && gaveUp && <Alert tone="info">Still waiting for the provider. You can leave this page; come back to your payments later to see the result.</Alert>}
         {payment.mode === "sandbox" && <Alert tone="warning" title="Test payment">This was made in the provider&apos;s test (sandbox) environment. No real money moved.</Alert>}
-        {payment.status === "REQUIRES_REVIEW" && <p className="text-sm text-ink-muted">If you contact us, quote the reference <span className="font-mono">{payment.reference}</span>.</p>}
+        {payment.status === "REQUIRES_REVIEW" && <p className="text-sm text-ink-muted">Keep this reference: <span className="font-mono">{payment.reference}</span>. Support contact details are not published yet; an administrator can look the payment up by it.</p>}
       </div>
 
       <Card className="p-6">

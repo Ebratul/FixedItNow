@@ -26,7 +26,7 @@ export function FeedView() {
 function Feed() {
   const [page, setPage] = useState(1);
   const [scope, setScope] = useState<"all" | "mine">("all");
-  const { state, reload } = useApi<PostList>(`/community/posts?scope=${scope}&page=${page}&pageSize=10`);
+  const { state, reload, stale } = useApi<PostList>(`/community/posts?scope=${scope}&page=${page}&pageSize=10`);
   const [notice, setNotice] = useState<string>();
 
   return (
@@ -41,7 +41,7 @@ function Feed() {
           <Button size="sm" variant={scope === "mine" ? "primary" : "secondary"} aria-pressed={scope === "mine"} onClick={() => { setScope("mine"); setPage(1); }}>Mine</Button>
         </div>
       </div>
-      {state.status === "loading" || state.status === "unauthenticated" ? (
+      {state.status === "loading" || state.status === "unauthenticated" || stale ? (
         <div aria-busy="true" aria-label="Loading posts" className="space-y-3"><Skeleton className="h-28" /><Skeleton className="h-28" /></div>
       ) : state.status === "error" ? (
         <ErrorState action={<Button onClick={reload}>Try again</Button>}>{state.message}</ErrorState>

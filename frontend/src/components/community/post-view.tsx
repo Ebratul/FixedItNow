@@ -25,7 +25,7 @@ export function PostView({ id }: { id: string }) {
 }
 
 function Detail({ id }: { id: string }) {
-  const { state, reload } = useApi<{ post: Post }>(`/community/posts/${id}`);
+  const { state, refresh } = useApi<{ post: Post }>(`/community/posts/${id}`);
   if (state.status === "loading" || state.status === "unauthenticated") return <Skeleton className="h-64" />;
   if (state.status === "error") {
     return (
@@ -34,10 +34,10 @@ function Detail({ id }: { id: string }) {
       </ErrorState>
     );
   }
-  return <PostBody initial={state.data.post} reload={reload} />;
+  return <PostBody initial={state.data.post} refresh={refresh} />;
 }
 
-function PostBody({ initial, reload }: { initial: Post; reload: () => void }) {
+function PostBody({ initial, refresh }: { initial: Post; refresh: () => void }) {
   const router = useRouter();
   const [post, setPost] = useState(initial);
   const [editing, setEditing] = useState(false);
@@ -95,7 +95,7 @@ function PostBody({ initial, reload }: { initial: Post; reload: () => void }) {
         {error && <Alert tone="error">{error}</Alert>}
       </article>
 
-      {!hidden && <Comments postId={post.id} onCount={reload} />}
+      {!hidden && <Comments postId={post.id} onCount={refresh} />}
       <CommunityNote />
       <ConfirmDialog
         open={confirmDelete}

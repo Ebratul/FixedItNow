@@ -1,5 +1,7 @@
 # Step 10 audit: readiness, findings and evidence
 
+> A second, broader pass (all findings, fixes, test table, Vercel variables and the readiness decision) is in **[QA_REPORT.md](QA_REPORT.md)**. Where the two differ, QA_REPORT.md is newer.
+
 Scope: the whole repository as it stood after Step 9, audited from the code, the database and running systems. Method: code review of every controller, service and guard; automated default-deny and abuse tests; a secret scan of history and tree; dependency audits; migration, backup and restore rehearsals on disposable databases; load measurement on a synthetic dataset; a real-Chrome run of the web app; and a build-and-run of the container images in a disposable staging stack.
 **Nothing was deployed, pushed, committed or run against production, and no real payment, email or provider call was made.** Companion documents: [RUNBOOK.md](RUNBOOK.md) (operations), [SECURITY.md](SECURITY.md), [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -18,7 +20,7 @@ Scope: the whole repository as it stood after Step 9, audited from the code, the
 | Authorization (default deny, ownership, admin) | **Implemented and verified** | `test/route-audit.e2e-spec.ts` calls every route without a session; IDOR tests per domain |
 | Availability, bookings, quotes, rescheduling, cancellation, disputes | **Implemented and verified** | Parallel-booking tests; DB exclusion constraint; browser journey |
 | bKash and SSLCOMMERZ payments and refunds | **Implemented and tested against mocks only; blocked on real sandbox credentials** | No call to either provider was ever made. Several provider details are explicitly unverified (PAYMENTS.md) |
-| **Booking-linked messaging and notifications** | **Not implemented** (Step 7 was never built) | SRS FR-CHAT/notifications unmet; the UI no longer implies they exist. A launch decision, see blockers |
+| **Booking-linked messaging and notifications** | **Booking-linked messaging: not implemented** (Step 7 was never built). *Update: in-app notifications, announcements and support tickets now exist (docs/ADMIN.md); email/SMS/push delivery does not.* | SRS FR-CHAT/notifications unmet; the UI no longer implies they exist. A launch decision, see blockers |
 | Private media / identity documents | **Not implemented** | No upload route exists (asserted by test). "Profile reviewed" is a staff review of text, not an identity check |
 | AI assistant (OpenRouter, RAG, grounding) | **Implemented and verified with mocks and a local fake model; real OpenRouter untested** | Real-process contract test; running containers (api <-> ai) in the staging stack; extraction quality of any real model unmeasured |
 | Reviews, ratings, community, proposals, reports, moderation | **Implemented and verified** | API tests, mutation checks, real-Chrome flows |

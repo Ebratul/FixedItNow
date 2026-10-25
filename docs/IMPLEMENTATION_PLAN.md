@@ -60,7 +60,8 @@ progress), `/account`.
 | Backend authorization (default-deny, admin, approved-worker, ownership) | **Implemented and verified** |
 | Admin review API + audit log; `admin:grant` operator script | **Implemented and verified** (no admin UI) |
 | Rate limiting (auth + API) | **Implemented and verified** locally; production needs a proxy + `TRUSTED_PROXIES` |
-| Google OAuth | **Implemented, NOT externally verified.** Config/state/PKCE/redirect URI/errors/linking policy tested; a real login needs Google credentials |
+| Google OAuth | **Implemented, NOT externally verified.** Config/state/PKCE/redirect URI/errors/linking policy tested (stubbed Google token endpoint); a real login needs Google credentials |
+| Email verification by one-time code (OTP) | **Implemented and verified locally** (expiry, 5-attempt limit, replay, cooldown, hourly cap, hashed storage, password binding, real-Chrome journey). Real email delivery NOT verified. See [AUTH.md](AUTH.md) |
 | Real SMTP provider | **Implemented, NOT externally verified** (needs provider credentials) |
 | Identity-document upload/verification | **Not implemented** (later step) |
 | Terms/Privacy pages + acceptance | **Not implemented** (no approved text) |
@@ -69,7 +70,7 @@ progress), `/account`.
 ### Verification performed
 - Backend: `npm run typecheck`, `npm run lint`, `npm test` (24 unit), `npm run test:e2e` (87 integration tests on a real PostgreSQL test database), `npm run build`, `npm audit` (0 vulnerabilities).
 - Frontend: `npm run lint`, `npm run typecheck`, `npm test` (65 tests), `npm run build`, `npm audit` (0 vulnerabilities).
-- Real Chrome against the running stack: registration -> verification link -> onboarding (customer + 5-step worker wizard, resume after reload) -> submit -> logout -> wrong/unknown-email login -> password reset (single-use) -> open-redirect `?next=` ignored.
+- Real Chrome against the running stack: registration -> emailed 6-digit code -> onboarding (customer + 5-step worker wizard, resume after reload) -> submit -> logout -> wrong/unknown-email login -> password reset (single-use) -> open-redirect `?next=` ignored.
 - axe-core and horizontal-overflow checks on all auth/onboarding/account pages at 375, 430, 768, 1366, 1440 px: no violations.
 
 ### Known gaps

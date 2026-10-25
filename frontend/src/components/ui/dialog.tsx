@@ -15,6 +15,7 @@ export function Dialog({
   title,
   className,
   variant = "sheet",
+  dismissible = true,
   children,
 }: {
   open: boolean;
@@ -23,6 +24,11 @@ export function Dialog({
   className?: string;
   /** "sheet": full-width panel from the top (mobile menu). "modal": centred card. */
   variant?: "sheet" | "modal";
+  /**
+   * false while the dialog is busy (a request is in flight): Escape and a backdrop click are ignored, so the
+   * native dialog can never be closed behind a parent that still thinks it is open.
+   */
+  dismissible?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -39,9 +45,12 @@ export function Dialog({
       ref={ref}
       aria-label={title}
       onClose={onClose}
+      onCancel={(event) => {
+        if (!dismissible) event.preventDefault();
+      }}
       onClick={(event) => {
         // Clicking the backdrop (the dialog element itself) dismisses it.
-        if (event.target === ref.current) onClose();
+        if (event.target === ref.current && dismissible) onClose();
       }}
       className={cn(
         "bg-canvas p-0 text-ink backdrop:backdrop-blur-[1px] open:animate-fade-up",

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { PaymentDetailView } from "@/components/payments/payment-detail";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isPaymentReference } from "@/lib/route-params";
 
 export const metadata: Metadata = { title: "Payment", robots: { index: false } };
 
@@ -21,5 +23,6 @@ export default function PaymentPage({ params }: PageProps<"/payments/[reference]
 
 async function Detail({ params }: Pick<PageProps<"/payments/[reference]">, "params">) {
   const { reference } = await params;
+  if (!isPaymentReference(reference)) notFound();
   return <PaymentDetailView reference={reference} />;
 }

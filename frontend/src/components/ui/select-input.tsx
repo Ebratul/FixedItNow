@@ -10,7 +10,8 @@ type SelectInputProps = Omit<ComponentProps<"select">, "id"> & {
   error?: string;
   hideLabel?: boolean;
   options: readonly (string | { value: string; label: string })[];
-  placeholder: string;
+  /** The empty first option's text; `null` renders no empty option (for selects that must always have a value). */
+  placeholder: string | null;
 };
 
 /** Native <select> with the shared control styling. */
@@ -35,7 +36,7 @@ export function SelectInput({
           className={cn(controlClasses, "appearance-none pr-10", className)}
           {...props}
         >
-          <option value="">{placeholder}</option>
+          {placeholder !== null && <option value="">{placeholder}</option>}
           {options.map((option) => {
             const { value, label } =
               typeof option === "string" ? { value: option, label: option } : option;

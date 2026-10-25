@@ -16,12 +16,12 @@ export const TRUST_PRINCIPLES = [
   {
     icon: BadgeCheck,
     title: "Honest verification status",
-    text: "A Verified badge is shown only after a reviewer approves a worker. Pending and rejected states are never dressed up.",
+    text: "A “Profile reviewed” label is shown only after an administrator approves a worker. Pending and rejected states are never dressed up.",
   },
   {
     icon: MessageSquareText,
-    title: "Booking-linked messaging",
-    text: "Conversations stay attached to the booking they relate to.",
+    title: "Problems stay with the booking",
+    text: "If something goes wrong, open a dispute on the booking. The messages about it stay attached to that booking.",
   },
   {
     icon: Star,
@@ -30,8 +30,8 @@ export const TRUST_PRINCIPLES = [
   },
   {
     icon: LifeBuoy,
-    title: "Support and dispute handling",
-    text: "A defined process for resolving problems between customers and professionals.",
+    title: "Dispute handling",
+    text: "A defined process, with an administrator review, for resolving problems between customers and professionals.",
   },
 ];
 
@@ -39,12 +39,24 @@ export function TrustSection() {
   return (
     <section
       aria-labelledby="trust-heading"
-      className="section-y bg-brand-950 text-white"
+      className="section-y relative overflow-hidden bg-brand-950 text-white"
     >
-      <div className="container-page">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 right-0 size-[28rem] rounded-full bg-accent-500/15 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-40 -left-24 size-[28rem] rounded-full bg-brand-500/20 blur-3xl"
+      />
+      <div className="container-page relative">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="mb-2 text-sm font-semibold tracking-wide text-accent-300 uppercase">
+            <p className="eyebrow mb-3 text-accent-300">
+              <span
+                aria-hidden
+                className="h-0.5 w-6 rounded-full bg-accent-400"
+              />
               Trust & safety
             </p>
             <h2
@@ -62,10 +74,13 @@ export function TrustSection() {
             In development
           </Badge>
         </div>
-        <ul className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {TRUST_PRINCIPLES.map(({ icon: Icon, title, text }) => (
-            <li key={title} className="flex gap-4">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-control bg-white/10 text-accent-300">
+            <li
+              key={title}
+              className="flex gap-4 rounded-card border border-white/10 bg-white/[0.04] p-5 transition-colors hover:border-accent-400/40 hover:bg-white/[0.08]"
+            >
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-control bg-gradient-to-br from-accent-400/30 to-accent-600/20 text-accent-300 ring-1 ring-accent-300/20">
                 <Icon className="size-6" aria-hidden />
               </span>
               <div>

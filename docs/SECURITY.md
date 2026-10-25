@@ -111,7 +111,7 @@ Full model: [AI.md](AI.md). Controls:
 ## Reviews, community and moderation (Step 9)
 
 Full model and policies: [COMMUNITY.md](COMMUNITY.md). Controls (each has a test):
-- **Review integrity:** eligibility (customer of a `COMPLETED` booking) is decided server-side from the database; `UNIQUE (bookingId)` stops duplicates under parallel requests; bodies are strict, so `customerId`, `workerProfileId`, `status`, "verified", moderation fields are rejected; "Verified booking" is derived from a join, never a flag; hidden reviews cannot be edited or withdrawn; edits keep the previous text; only the author can edit/withdraw (others get the same `404` as a missing review).
+- **Review integrity:** eligibility (customer of a `COMPLETED` booking with a provider-verified payment) is decided server-side from the database; `UNIQUE (bookingId)` stops duplicates under parallel requests; bodies are strict, so `customerId`, `workerProfileId`, `status`, "verified", moderation fields are rejected; "Verified booking" is derived from a join, never a flag; hidden reviews cannot be edited or withdrawn; edits keep the previous text; only the author can edit/withdraw (others get the same `404` as a missing review).
 - **Access control / IDOR:** content ownership is checked in the `WHERE` of every write (`authorId = session user`); another user's post/comment/review is `404`; hidden/deleted content is `404` to everyone but the author (who sees a "removed" state); all admin routes use `RequireAdmin` (role re-read from the database on each request). Role/`isAdmin` in a body, query string or header does nothing (tested). Registration and onboarding cannot grant admin.
 - **Conflict of interest:** an administrator cannot moderate their own content, decide a report they filed, or decide their own proposal.
 - **Duplicates and races:** reactions and votes use `ON CONFLICT DO NOTHING` on unique indexes (parallel requests tested); one report per user per item; report decisions and proposal decisions are conditional updates (two moderators: one wins).
@@ -133,6 +133,7 @@ Findings, severities, evidence and the launch blockers: [AUDIT.md](AUDIT.md). Co
 - **Web hardening:** Content-Security-Policy (same-origin only; `frame-ancestors 'none'`, `object-src 'none'`), `Cross-Origin-Opener-Policy`, HSTS in production. `script-src 'unsafe-inline'` remains because Next's bootstrap scripts need it without a per-request nonce; acceptable because user content is only ever rendered as text.
 - **Resource limits:** explicit database pool size, connect timeout and statement timeout; bounded SMTP timeouts.
 - **Secrets:** gitleaks over the whole history and tree found nothing real; `npm audit` (both apps) and `pip-audit` report no vulnerabilities.
+- **Booking chat:** participants only (everyone else, including administrators who are not a party, gets the booking's 404); sender, role and booking come from the session and the URL, never the body (strict schema); a database trigger rejects a message from a non-participant, in the wrong role, or on a booking that was never confirmed; a second trigger makes `chat_message` append-only; text is plain, validated like other user text, never copied into notifications; no endpoint exposes messages publicly or to admin views.
 - **Honest UI:** stale copy claiming features were unavailable (or available, for messaging) was corrected.
 - **Still open:** no real-provider verification (payments, OAuth, SMTP, OpenRouter), no messaging/notifications, no scheduler, per-process rate-limit counters, no Terms/Privacy, no account deletion, no third-party penetration test.
 
@@ -150,12 +151,13 @@ with Google" gets a clear `account_not_linked` message instead of silent merging
 
 1. **Better Auth disables origin/redirect validation when `NODE_ENV=test`** by default. Tests initially "passed" an open redirect. Fixed by setting `advanced.disableOriginCheck=false` explicitly and asserting it in tests.
 2. **Next.js rewrites do not set `X-Forwarded-For` and pass client-supplied values through.** Behind the rewrite alone, Better Auth cannot identify clients (rate limiting would be skipped or spoofable). Mitigation: production **requires** `TRUSTED_PROXIES` and a real reverse proxy that sets the header; rotation-spoofing is covered by a test. See `docs/DEPLOYMENT.md`.
-3. `sendOnSignIn` produced verification links landing on `/`; replaced by an explicit resend with the right callback.
+3. `sendOnSignIn` produced verification links landing on `/`. Superseded: email verification is now a one-time code (see [AUTH.md](AUTH.md)); codes are HMAC-hashed at rest, expire in 10 min, allow 5 guesses, are single-use, and verification also requires the account password so a pre-registered address cannot be hijacked with the owner's code.
 4. Starter template pulled in `@nestjs/mau` with high-severity advisories; removed (unused).
 
 ## Not done / known limitations
 
-- **Google OAuth is not verified end to end** (no credentials). Config, state, PKCE, redirect URI, error handling and linking policy are tested; a real token exchange is not.
+- **Google OAuth is not verified end to end** (no credentials). Config, state, PKCE, redirect URI, error handling and linking policy are tested against a stubbed token endpoint; a real token exchange is not.
+- **OTP email delivery is not verified end to end** (console sink only). Whether a Vercel rewrite forwards the real client IP is unverified; the per-address OTP limits do not depend on it.
 - **SMTP verified only against a local sink**, not a real provider; deliverability (SPF/DKIM) is untested.
 - Identity-document upload/verification does not exist, so `VERIFIED` means "admin reviewed the profile", not "identity checked". The UI says so; no public listing or badge exists yet.
 - No Terms/Privacy pages or acceptance checkbox (no approved legal text). Needed before launch.
@@ -165,3 +167,12 @@ with Google" gets a clear `account_not_linked` message instead of silent merging
 - Admin has no UI yet (API + operator script only).
 - AI assistant: not tested with a real model/provider; rate-limit counters are per process; `/api/v1/internal/ai/*` is token-protected but should also be blocked at the proxy; no CSP yet (see above).
 - Dependency/vulnerability scanning is a manual `npm audit` (0 vulnerabilities at the time of writing); no CI yet.
+
+
+## Admin panel (see [ADMIN.md](ADMIN.md))
+
+* **Authorisation:** `@RequirePermission` on every `/admin/*` route (a test enumerates the real controllers and fails on a route without one, or a permission no route uses). Permissions are read from the database per request. ADMIN without a role = no permissions. Escalation rules, self-action bans and the last-super-admin trigger are described in ADMIN.md.
+* **Identity documents:** encrypted at rest (AES-256-GCM, row-bound AAD), no public or owner read path, audited per view, `no-store` + sandboxed responses, magic-byte validation, size cap, rate limit. Not covered: retention/auto-deletion, malware scanning, EXIF stripping, key rotation tooling.
+* **Audit:** append-only trigger + SHA-256 hash chain verified inside PostgreSQL; metadata sanitiser; the residual risk (superuser rebuilding the chain, TRUNCATE, deleting the newest rows) needs an external head-hash anchor and restricted database roles.
+* **Confirmation:** money-moving, access-removing and publishing actions require `confirm: true` server-side in addition to the UI dialog.
+* **Maintenance mode** never blocks payment-provider callbacks (money in flight must land) or administrators.

@@ -17,6 +17,8 @@ export type BookingSummary = {
   endAt: string;
   agreedAmountBdt: number | null;
   pricingModel: "FIXED" | "HOURLY" | "QUOTE";
+  /** Set once the professional reported arriving (self-reported; no location is verified). */
+  arrivedAt: string | null;
   createdAt: string;
 };
 
@@ -99,6 +101,12 @@ export type BookingDetail = {
     customer?: { name: string };
     pricing: { model: "FIXED" | "HOURLY" | "QUOTE"; unitPriceBdt: number | null; agreedAmountBdt: number | null; currency: string };
     confirmedAt: string | null;
+    /** When "I have arrived" / "Start job" become available (30 minutes before the appointment). */
+    startWindowOpensAt: string;
+    /** The professional's own report that they arrived. Not verified by GPS or any location check. */
+    arrivedAt: string | null;
+    startedAt: string | null;
+    completionRequestedAt: string | null;
     completedAt: string | null;
     cancellation: { at: string; reason: string | null; by: string | null } | null;
     createdAt: string;
@@ -108,10 +116,31 @@ export type BookingDetail = {
   rescheduleRequests: RescheduleRequest[];
   dispute: DisputeSummary | null;
   events: BookingEvent[];
+  /** Whether the booking's private chat is open, read-only, or not available (yet). */
+  chat: ChatAvailability;
   /** Customer: full summary. Professional: only whether a verified payment exists. */
   payment: BookingPayment;
   /** Customer: can they review, and their own review. Professional: a visible review only. */
   review: BookingReview;
+};
+
+export type ChatAvailability = { state: "NOT_OPEN" | "OPEN" | "READ_ONLY"; reason: string | null };
+
+export type ChatMessage = {
+  id: string;
+  senderRole: ViewerRole;
+  mine: boolean;
+  body: string;
+  createdAt: string;
+  /** Only on the sender's own messages: lets the client match its pending copy. */
+  clientMessageId?: string;
+};
+
+export type ChatThread = {
+  chat: ChatAvailability;
+  counterparty: { displayName: string; role: ViewerRole; slug: string | null };
+  messages: ChatMessage[];
+  hasMore: boolean;
 };
 
 export type BookingPayment =

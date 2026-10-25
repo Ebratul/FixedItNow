@@ -12,11 +12,15 @@ import { fieldErrorsOf, formValues, loginSchema } from "@/lib/validation";
 import { focusFirstInvalid } from "@/lib/focus";
 import { safeNext } from "@/lib/safe-redirect";
 import { GoogleSection } from "./google-section";
+import { VerifyCodeForm } from "./verify-code-form";
 
 const OAUTH_ERRORS: Record<string, string> = {
   access_denied: "Google sign-in was cancelled.",
   account_not_linked:
-    "An account with this email already exists. Log in with your password first, then connect Google from your account page.",
+    "An account with this email already exists. Log in with your password (or use “Forgot password”), then connect Google from your account page.",
+  unable_to_create_user: "Google did not confirm this email address, so we couldn't sign you in with it.",
+  invalid_code: "Google sign-in could not be completed. Please try again.",
+  oauth_provider_not_found: "Google sign-in is not available right now.",
   state_mismatch: "Your sign-in session expired. Please try again.",
   invalid_state: "Your sign-in session expired. Please try again.",
 };
@@ -31,6 +35,8 @@ export function LoginForm() {
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string }>();
+  // Held in memory only, so the code step can send the password the server requires.
+  const [unverified, setUnverified] = useState<{ email: string; password: string }>();
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,16 +61,9 @@ export function LoginForm() {
 
     if (error.status === 403) {
       // Only reachable with the CORRECT password, so this reveals nothing new.
-      const { error: resendError } = await authClient.sendVerificationEmail({
-        email: parsed.data.email,
-        callbackURL: "/verify-email",
-      });
-      setNotice({
-        tone: resendError ? "error" : "info",
-        text: resendError
-          ? "Your email isn't verified yet, and we couldn't send a new link right now. Please wait a few minutes and try again."
-          : "Your email isn't verified yet. We've sent you a fresh verification link, so check your inbox.",
-      });
+      // The code step requests a code (the server applies its own cooldown).
+      setUnverified({ email: parsed.data.email, password: parsed.data.password });
+      return;
     } else if (error.status === 429) {
       setNotice({ tone: "error", text: "Too many attempts. Please wait a minute and try again." });
     } else if (error.status === 401) {
@@ -74,6 +73,10 @@ export function LoginForm() {
       setNotice({ tone: "error", text: "We couldn't log you in. Please try again." });
     }
     setPending(false);
+  }
+
+  if (unverified) {
+    return <VerifyCodeForm email={unverified.email} password={unverified.password} sendOnMount startCooldown next={next} onBack={() => { setUnverified(undefined); setPending(false); }} />;
   }
 
   return (

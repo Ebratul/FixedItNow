@@ -40,7 +40,8 @@ export function FavoriteButton({
   async function toggle() {
     if (busy) return;
     if (!session) {
-      router.push(`/login?next=${encodeURIComponent(pathname)}`);
+      // Keep the filters/page the visitor was on (`?location=Sylhet&page=2`), not just the path.
+      router.push(`/login?next=${encodeURIComponent(pathname + window.location.search)}`);
       return;
     }
     if (favorites.status !== "ready") return;

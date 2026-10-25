@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/workers" }));
@@ -8,7 +8,9 @@ vi.mock("@/lib/auth-client", () => ({
 
 import { ProfessionalCard } from "@/components/professional/professional-card";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Rating } from "@/components/ui/rating";
+import { SelectInput } from "@/components/ui/select-input";
 import { TextInput } from "@/components/ui/text-input";
 import type { WorkerCardData } from "@/lib/discovery-types";
 
@@ -99,5 +101,42 @@ describe("TextInput", () => {
     const input = screen.getByLabelText("Name");
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAccessibleDescription("Required");
+  });
+});
+
+describe("SelectInput", () => {
+  it("renders an empty first option only when asked to, so a must-have-a-value select cannot submit nothing", () => {
+    const options = [{ value: "24", label: "24 hours" }, { value: "48", label: "48 hours" }];
+    const { rerender } = render(<SelectInput id="a" label="Valid for" placeholder="Choose" options={options} defaultValue="" />);
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Choose", "24 hours", "48 hours"]);
+    rerender(<SelectInput id="a" label="Valid for" placeholder={null} options={options} defaultValue="24" />);
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["24 hours", "48 hours"]);
+  });
+});
+
+describe("Dialog", () => {
+  // jsdom has no <dialog> behaviour, so the dialog methods are stubbed; the handlers are what is under test.
+  const stub = () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute("open", ""); });
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.removeAttribute("open"); });
+  };
+
+  it("ignores Escape while it is not dismissible (a request is in flight), and honours it otherwise", () => {
+    stub();
+    const onClose = vi.fn();
+    const { container, rerender } = render(<Dialog open onClose={onClose} title="Confirm" dismissible={false}><p>body</p></Dialog>);
+    const dialog = container.querySelector("dialog")!;
+    const busy = new Event("cancel", { cancelable: true });
+    dialog.dispatchEvent(busy);
+    expect(busy.defaultPrevented).toBe(true);
+    fireEvent.click(dialog); // backdrop click
+    expect(onClose).not.toHaveBeenCalled();
+
+    rerender(<Dialog open onClose={onClose} title="Confirm"><p>body</p></Dialog>);
+    const idle = new Event("cancel", { cancelable: true });
+    dialog.dispatchEvent(idle);
+    expect(idle.defaultPrevented).toBe(false);
+    fireEvent.click(dialog);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

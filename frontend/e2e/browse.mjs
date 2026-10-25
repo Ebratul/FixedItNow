@@ -171,16 +171,15 @@ await flow("A/B: the professional sees the request and accepts it; the customer 
   await page.getByRole("button", { name: "Accept and confirm" }).click();
   await page.getByText("Booking confirmed").first().waitFor();
 });
-await flow("A: customer sees the confirmed booking; payment page is honest when no provider is configured", "cust3", async (page) => {
+await flow("A: confirmed booking: payment opens only after the work is finished; the chat button is there", "cust3", async (page) => {
   await page.goto(`${BASE}/bookings/${newBookingId}`, { waitUntil: "networkidle" });
   await page.getByText(/Confirmed/i).first().waitFor();
+  await page.getByText(/Payment opens once the work is marked finished/).waitFor();
+  if ((await page.getByRole("link", { name: "Pay now" }).count()) > 0) throw new Error("Pay now offered before the work is finished");
+  await page.getByRole("button", { name: /^Chat with/ }).waitFor();
   await page.goto(`${BASE}/bookings/${newBookingId}/pay`, { waitUntil: "networkidle" });
-  await page.getByText(/not available|unavailable|not configured/i).first().waitFor();
-});
-await flow("no messaging UI exists (Step 7 not built): no link or page claims to offer it", "cust3", async (page) => {
-  await page.goto(`${BASE}/bookings/${newBookingId}`, { waitUntil: "networkidle" });
-  if ((await page.getByRole("link", { name: /message|chat|inbox/i }).count()) > 0) throw new Error("a messaging link is shown");
-  const res = await page.goto(`${BASE}/messages`);
+  await page.getByText(/cannot be paid right now/i).first().waitFor();
+  const res = await page.goto(`${BASE}/messages`); // there is a chat per booking, not a global inbox
   if (res && res.status() < 400) throw new Error("/messages should not exist");
 });
 

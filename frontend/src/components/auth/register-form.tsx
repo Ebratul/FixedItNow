@@ -1,6 +1,5 @@
 "use client";
 
-import { MailCheck } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -10,13 +9,15 @@ import { authClient } from "@/lib/auth-client";
 import { focusFirstInvalid } from "@/lib/focus";
 import { fieldErrorsOf, formValues, MIN_PASSWORD_LENGTH, registerSchema } from "@/lib/validation";
 import { GoogleSection } from "./google-section";
+import { VerifyCodeForm } from "./verify-code-form";
 
 export function RegisterForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>();
-  const [sentTo, setSentTo] = useState<string>();
+  // Held in memory only (never in the URL or storage) until the code is verified.
+  const [pendingAccount, setPendingAccount] = useState<{ email: string; password: string }>();
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,14 +38,13 @@ export function RegisterForm() {
       name,
       email,
       password,
-      callbackURL: "/verify-email",
     });
     setPending(false);
 
     if (!error) {
       // The server answers identically whether or not the email already exists,
-      // so this message is true in both cases and reveals nothing.
-      setSentTo(email);
+      // so moving to the code step is correct in both cases and reveals nothing.
+      setPendingAccount({ email, password });
       return;
     }
     if (error.status === 429) {
@@ -56,25 +56,14 @@ export function RegisterForm() {
     }
   }
 
-  if (sentTo) {
+  if (pendingAccount) {
     return (
-      <div className="text-center">
-        <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-accent-50 text-accent-700">
-          <MailCheck className="size-7" aria-hidden />
-        </span>
-        <h2 className="mt-4 text-xl font-bold">Check your email</h2>
-        <p className="mt-2 text-ink-muted">
-          If <strong className="text-ink">{sentTo}</strong> can be used to create an account, we&apos;ve
-          sent a verification link. It expires in 1 hour. You can log in after confirming your
-          email.
-        </p>
-        {process.env.NODE_ENV === "development" && (
-          <Alert tone="info" className="mt-4 text-left">
-            Development only: with the console mail transport, the link is printed in the backend
-            terminal.
-          </Alert>
-        )}
-      </div>
+      <VerifyCodeForm
+        email={pendingAccount.email}
+        password={pendingAccount.password}
+        startCooldown
+        onBack={() => setPendingAccount(undefined)}
+      />
     );
   }
 

@@ -30,7 +30,7 @@ function List() {
       ) : state.status === "error" ? (
         <ErrorState action={<Button onClick={reload}>Try again</Button>}>{state.message}</ErrorState>
       ) : state.data.payments.length === 0 ? (
-        <EmptyState icon={Receipt} title="No payments yet">When you pay for a confirmed booking, the payment and its verified status will appear here.</EmptyState>
+        <EmptyState icon={Receipt} title="No payments yet">When you pay for a finished job, the payment and its verified status will appear here.</EmptyState>
       ) : (
         <>
           <ul className="space-y-3">

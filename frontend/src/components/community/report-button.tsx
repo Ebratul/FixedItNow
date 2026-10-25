@@ -50,7 +50,7 @@ export function ReportButton({ type, id, label = "Report" }: { type: ReportTarge
 
   function start() {
     if (!session) {
-      router.push(`/login?next=${encodeURIComponent(pathname)}`);
+      router.push(`/login?next=${encodeURIComponent(pathname + window.location.search)}`);
       return;
     }
     setSent(false);

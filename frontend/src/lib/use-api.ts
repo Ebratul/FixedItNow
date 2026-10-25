@@ -9,21 +9,34 @@ export type ApiState<T> =
   | { status: "unauthenticated" }
   | { status: "error"; message: string };
 
-/** GET a backend resource and expose loading / error / unauthenticated states. */
+/**
+ * GET a backend resource and expose loading / error / unauthenticated states.
+ *
+ * - `reload()` clears the screen to "loading" and refetches (use after a failure, "Try again").
+ * - `refresh()` refetches WITHOUT clearing: the current data stays mounted, so unsaved form input,
+ *   focus and scroll position survive (use after a small mutation on the same page).
+ * - `stale` is true while `state` still holds the previous `path`'s data (paging, filtering) and the
+ *   new response has not arrived, so lists can show a busy cue instead of silently showing old rows.
+ */
 export function useApi<T>(path: string) {
   const [state, setState] = useState<ApiState<T>>({ status: "loading" });
+  const [loadedPath, setLoadedPath] = useState(path);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    const done = (next: ApiState<T>) => {
+      if (cancelled) return;
+      setState(next);
+      setLoadedPath(path);
+    };
     api<T>(path)
-      .then((data) => !cancelled && setState({ status: "ready", data }))
+      .then((data) => done({ status: "ready", data }))
       .catch((error: unknown) => {
-        if (cancelled) return;
         if (error instanceof ApiError && error.status === 401) {
-          setState({ status: "unauthenticated" });
+          done({ status: "unauthenticated" });
         } else {
-          setState({
+          done({
             status: "error",
             message: error instanceof Error ? error.message : "Something went wrong.",
           });
@@ -39,12 +52,16 @@ export function useApi<T>(path: string) {
     setVersion((v) => v + 1);
   }, []);
 
-  return { state, reload };
+  const refresh = useCallback(() => setVersion((v) => v + 1), []);
+
+  return { state, reload, refresh, stale: loadedPath !== path };
 }
 
 export type Me = {
   user: { id: string; name: string; email: string; emailVerified: boolean; image: string | null };
   isAdmin: boolean;
+  /** Convenience for hiding controls. The server decides on every request. */
+  admin: { role: { key: string; name: string } | null; permissions: string[] } | null;
   customer: { onboarded: boolean; profile?: { displayName: string; preferredDivision: string | null } };
   worker: {
     started: boolean;

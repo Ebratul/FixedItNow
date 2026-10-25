@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, CalendarDays, Heart, KeyRound, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Bell, Heart, KeyRound, LifeBuoy, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/account/auth-gate";
 import { VerificationBadge } from "@/components/account/worker-status";
@@ -118,12 +118,34 @@ function Overview({ me }: { me: Me }) {
       {me.isAdmin && (
         <Card className="mt-5 flex items-center justify-between gap-4 p-6">
           <div>
-            <h2 className="text-lg font-bold">Moderation</h2>
-            <p className="mt-1 text-sm text-ink-muted">Reports, feature proposals and the moderation history.</p>
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <ShieldCheck className="size-5 text-brand-600" aria-hidden /> Admin panel
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">Users, bookings, payments, support, moderation and platform settings.</p>
           </div>
-          <LinkButton href="/admin/moderation" variant="secondary" size="sm">Open moderation</LinkButton>
+          <LinkButton href="/admin" variant="secondary" size="sm">Open admin panel</LinkButton>
         </Card>
       )}
+
+      <Card className="mt-5 flex items-center justify-between gap-4 p-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <Bell className="size-5 text-brand-600" aria-hidden /> Notifications
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">Updates about your bookings, support requests and account.</p>
+        </div>
+        <LinkButton href="/account/notifications" variant="secondary" size="sm">View notifications</LinkButton>
+      </Card>
+
+      <Card className="mt-5 flex items-center justify-between gap-4 p-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <LifeBuoy className="size-5 text-brand-600" aria-hidden /> Support
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">Ask for help or follow up on a request.</p>
+        </div>
+        <LinkButton href="/account/support" variant="secondary" size="sm">Get support</LinkButton>
+      </Card>
 
       <Card className="mt-5 flex items-center justify-between gap-4 p-6">
         <div>

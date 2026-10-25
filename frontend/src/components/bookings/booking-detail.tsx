@@ -18,13 +18,14 @@ import { EVENT_LABELS, formatBdt, formatDateTime, formatDuration, formatRange } 
 import { useApi } from "@/lib/use-api";
 import { DisputeForm, DisputePanel } from "./dispute-panel";
 import { PaymentBadge } from "@/components/payments/payment-badge";
+import { ChatSection } from "./chat-panel";
 import { ReviewPanel } from "@/components/reviews/review-panel";
 import { QuoteCard, QuoteForm } from "./quote-panel";
 import { RescheduleCard, RescheduleForm } from "./reschedule-panel";
 import { StatusBadge } from "./status-badge";
 
 type Dialog =
-  | { kind: "accept" | "decline" | "cancel" | "start" | "complete" | "confirm_completion" }
+  | { kind: "accept" | "decline" | "cancel" | "arrive" | "start" | "complete" | "mark_finished" }
   | { kind: "accept_quote" | "reject_quote"; quote: Quote }
   | { kind: "accept_reschedule" | "reject_reschedule"; request: RescheduleRequest };
 type Panel = "quote" | "reschedule" | "dispute" | null;
@@ -55,7 +56,7 @@ function PaymentCard({ detail }: { detail: BookingDetail }) {
   const latest = payment.payments[0];
   return (
     <section aria-labelledby="payment-heading">
-      <h2 id="payment-heading" className="text-h2 font-extrabold">Payment</h2>
+      <h2 id="payment-heading" className="text-h2 font-extrabold">{booking.status === "COMPLETION_PENDING" && payment.canPay ? "Payment due" : "Payment"}</h2>
       <Card className="mt-4 flex flex-wrap items-center justify-between gap-4 p-5">
         <div>
           <p className="font-semibold">
@@ -63,8 +64,11 @@ function PaymentCard({ detail }: { detail: BookingDetail }) {
             {" "}<span className="font-normal text-ink-muted">· {paymentLine(payment, "CUSTOMER")}</span>
           </p>
           {latest && <p className="mt-1 flex items-center gap-2 text-sm text-ink-muted">Latest attempt: <PaymentBadge payment={latest} /></p>}
-          {payment.state === "UNPAID" && !payment.canPay && booking.status !== "CANCELLED" && (
-            <p className="mt-1 text-sm text-ink-subtle">You can pay once the professional has confirmed the booking.</p>
+          {payment.state === "UNPAID" && !payment.canPay && !["CANCELLED", "DECLINED", "EXPIRED", "DISPUTED"].includes(booking.status) && (
+            <p className="mt-1 text-sm text-ink-subtle">Payment opens once the work is marked finished: by the professional, or by you with “Work is finished: pay now” if it was done early.</p>
+          )}
+          {payment.canPay && booking.status === "COMPLETION_PENDING" && (
+            <p className="mt-1 text-sm text-ink-muted">Payment is verified with bKash before the booking is marked completed. Coming back from bKash does not by itself mark it paid.</p>
           )}
         </div>
         <div className="flex flex-wrap gap-3">
@@ -77,6 +81,38 @@ function PaymentCard({ detail }: { detail: BookingDetail }) {
   );
 }
 
+/** Where the booking is in its life. Every step is a fact the server recorded; nothing here is a guess. */
+function Progress({ detail }: { detail: BookingDetail }) {
+  const { booking, payment, review } = detail;
+  if (["REQUESTED", "QUOTED", "CANCELLED", "DECLINED", "EXPIRED"].includes(booking.status) && !booking.confirmedAt) return null;
+  const paid = payment.state === "PAID" || payment.state === "PARTIALLY_REFUNDED";
+  const reviewed = "review" in review && review.review !== null;
+  const steps: { label: string; at: string | null; done: boolean }[] = [
+    { label: "Confirmed", at: booking.confirmedAt, done: booking.confirmedAt !== null },
+    { label: "Professional arrived", at: booking.arrivedAt, done: booking.arrivedAt !== null },
+    { label: "Work started", at: booking.startedAt, done: booking.startedAt !== null },
+    { label: "Work finished", at: booking.completionRequestedAt, done: booking.completionRequestedAt !== null },
+    { label: "Payment verified", at: null, done: paid },
+    { label: "Reviewed", at: null, done: reviewed },
+  ];
+  const current = steps.findIndex((s) => !s.done);
+  return (
+    <section aria-labelledby="progress-heading">
+      <h2 id="progress-heading" className="sr-only">Progress</h2>
+      <ol className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {steps.map((step, i) => (
+          <li key={step.label} aria-current={i === current ? "step" : undefined}
+            className={`rounded-control border px-3 py-2 text-sm ${step.done ? "border-success bg-success-soft font-semibold" : i === current ? "border-brand-700 font-semibold" : "border-line text-ink-subtle"}`}>
+            {i === current && <span className="block text-xs font-bold uppercase tracking-wide text-brand-700">Next</span>}
+            <span className="block">{step.done ? "✓ " : ""}{step.label}</span>
+            {step.at && <span className="block text-xs font-normal text-ink-muted">{formatDateTime(step.at)}</span>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 function View({ initial }: { initial: BookingDetail }) {
   const [detail, setDetail] = useState(initial);
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -84,7 +120,11 @@ function View({ initial }: { initial: BookingDetail }) {
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
   const live = useRef<HTMLDivElement>(null);
-  const requested = useSearchParams().get("requested") === "1";
+  const withdrawing = useRef(false);
+  const [withdrawingId, setWithdrawingId] = useState<string>();
+  const params = useSearchParams();
+  const requested = params.get("requested") === "1";
+  const chatRequested = params.get("chat") === "1";
   const { booking, actions, quotes, rescheduleRequests, dispute, events } = detail;
   const viewer = booking.viewerRole;
   const other = viewer === "CUSTOMER" ? booking.worker.displayName : (booking.customer?.name ?? "the customer");
@@ -104,6 +144,20 @@ function View({ initial }: { initial: BookingDetail }) {
     setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     live.current?.focus();
   };
+  /** Withdraw a quote / reschedule request once: a second click while the first is in flight is ignored. */
+  async function withdraw(id: string, path: string, message: string) {
+    if (withdrawing.current) return;
+    withdrawing.current = true;
+    setWithdrawingId(id);
+    try {
+      await run(path, {}, message);
+    } catch (e) {
+      fail(e);
+    } finally {
+      withdrawing.current = false;
+      setWithdrawingId(undefined);
+    }
+  }
   const done = (res: BookingDetail, message: string) => {
     setDetail(res);
     setPanel(null);
@@ -120,7 +174,7 @@ function View({ initial }: { initial: BookingDetail }) {
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-h1 font-extrabold text-brand-950">{booking.category.name}</h1>
-          <StatusBadge status={booking.status} />
+          <StatusBadge status={booking.status} arrivedAt={booking.arrivedAt} />
         </div>
         <p className="mt-2 text-lg text-ink-muted">{viewer === "CUSTOMER" ? "with" : "for"} {other}</p>
       </div>
@@ -135,8 +189,11 @@ function View({ initial }: { initial: BookingDetail }) {
         )}
         {booking.status === "EXPIRED" && <Alert tone="info">This request expired because its start time passed without a confirmation.</Alert>}
         {booking.status === "DISPUTED" && <Alert tone="warning" title="This booking is in dispute">It is on hold until a reviewer resolves it.</Alert>}
-        {booking.status === "COMPLETION_PENDING" && viewer === "CUSTOMER" && <Alert tone="info" title="Please confirm the work">{booking.worker.displayName} marked the job finished. Confirm it, or report a problem.</Alert>}
+        {booking.status === "COMPLETION_PENDING" && viewer === "CUSTOMER" && <Alert tone="info" title="The work is finished: payment is due">{booking.worker.displayName} marked the job finished. Pay the agreed amount below to complete the booking, or report a problem.</Alert>}
+        {booking.status === "COMPLETION_PENDING" && viewer === "WORKER" && <Alert tone="info" title="Waiting for the customer&apos;s payment">The booking completes after the customer&apos;s payment is verified. {detail.payment.state === "IN_PROGRESS" ? "A payment is in progress." : ""}</Alert>}
       </div>
+
+      <Progress detail={detail} />
 
       <Card className="p-6">
         <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-[9rem_1fr]">
@@ -146,6 +203,7 @@ function View({ initial }: { initial: BookingDetail }) {
           <dd>{booking.serviceAddress ? `${booking.serviceAddress}, ` : ""}{booking.serviceArea}{!booking.serviceAddress && <span className="text-ink-subtle"> · full address is shared once the booking is confirmed</span>}</dd>
           <dt className="font-semibold text-ink-muted">Details</dt>
           <dd className="whitespace-pre-line">{booking.description}</dd>
+          {booking.arrivedAt && (<><dt className="font-semibold text-ink-muted">Arrival</dt><dd>{formatDateTime(booking.arrivedAt)} <span className="text-ink-subtle">· reported by the professional (location is not verified)</span></dd></>)}
           <dt className="font-semibold text-ink-muted">Price</dt>
           <dd>{priceLine(booking)} {booking.pricing.agreedAmountBdt !== null && <span className="text-ink-subtle">· {paymentLine(detail.payment, viewer)}</span>}</dd>
           {booking.cancellation && (<><dt className="font-semibold text-ink-muted">Cancelled</dt><dd>{formatDateTime(booking.cancellation.at)}{booking.cancellation.by ? ` by ${booking.cancellation.by === "CUSTOMER" ? "the customer" : booking.cancellation.by === "WORKER" ? "the professional" : "a reviewer"}` : ""}{booking.cancellation.reason ? `: “${booking.cancellation.reason}”` : ""}</dd></>)}
@@ -157,7 +215,15 @@ function View({ initial }: { initial: BookingDetail }) {
 
       {viewer === "CUSTOMER" && <PaymentCard detail={detail} />}
 
+      <ChatSection bookingId={booking.id} chat={detail.chat} viewer={viewer} otherName={other} startOpen={chatRequested} />
+
       <ReviewPanel bookingId={booking.id} workerName={booking.worker.displayName} data={detail.review} onChanged={(review) => setDetail((d) => ({ ...d, review }))} />
+
+      {viewer === "WORKER" && booking.status === "CONFIRMED" && !has("start") && (
+        <Alert tone="info" title="Arrival and start open shortly before the appointment">
+          You can tell the customer you have arrived, and start the job, from {formatDateTime(booking.startWindowOpensAt)} (30 minutes before the scheduled time).
+        </Alert>
+      )}
 
       {actions.length > 0 && (
         <section aria-labelledby="actions-heading">
@@ -165,9 +231,10 @@ function View({ initial }: { initial: BookingDetail }) {
           <div className="mt-4 flex flex-wrap gap-3">
             {has("accept") && <Button variant="accent" onClick={() => setDialog({ kind: "accept" })}>Accept request</Button>}
             {has("quote") && <Button variant="accent" onClick={() => setPanel(panel === "quote" ? null : "quote")}>{pendingQuote ? "Revise quote" : "Send a quote"}</Button>}
-            {has("start") && <Button variant="accent" onClick={() => setDialog({ kind: "start" })}>Start job</Button>}
+            {has("arrive") && <Button variant="accent" onClick={() => setDialog({ kind: "arrive" })}>I have arrived</Button>}
+            {has("start") && <Button variant={has("arrive") ? "secondary" : "accent"} onClick={() => setDialog({ kind: "start" })}>Start job</Button>}
             {has("complete") && <Button variant="accent" onClick={() => setDialog({ kind: "complete" })}>Mark job finished</Button>}
-            {has("confirm_completion") && <Button variant="accent" onClick={() => setDialog({ kind: "confirm_completion" })}>Confirm work is complete</Button>}
+            {has("mark_finished") && <Button variant="accent" onClick={() => setDialog({ kind: "mark_finished" })}>Work is finished: pay now</Button>}
             {has("reschedule") && <Button variant="secondary" onClick={() => setPanel(panel === "reschedule" ? null : "reschedule")}>Request a different time</Button>}
             {has("decline") && <Button variant="secondary" onClick={() => setDialog({ kind: "decline" })}>Decline</Button>}
             {has("cancel") && <Button variant="secondary" onClick={() => setDialog({ kind: "cancel" })}>Cancel booking</Button>}
@@ -189,7 +256,8 @@ function View({ initial }: { initial: BookingDetail }) {
                 <QuoteCard quote={q} viewer={viewer}
                   onAccept={() => setDialog({ kind: "accept_quote", quote: q })}
                   onReject={() => setDialog({ kind: "reject_quote", quote: q })}
-                  onWithdraw={() => run(`quotes/${q.id}/withdraw`, {}, "Quote withdrawn.").catch(fail)} />
+                  withdrawing={withdrawingId === q.id}
+                  onWithdraw={() => void withdraw(q.id, `quotes/${q.id}/withdraw`, "Quote withdrawn.")} />
               </li>
             ))}
           </ul>
@@ -205,7 +273,8 @@ function View({ initial }: { initial: BookingDetail }) {
                 <RescheduleCard request={r} viewer={viewer}
                   onAccept={() => setDialog({ kind: "accept_reschedule", request: r })}
                   onReject={() => setDialog({ kind: "reject_reschedule", request: r })}
-                  onWithdraw={() => run(`reschedule/${r.id}/withdraw`, {}, "Request withdrawn.").catch(fail)} />
+                  withdrawing={withdrawingId === r.id}
+                  onWithdraw={() => void withdraw(r.id, `reschedule/${r.id}/withdraw`, "Request withdrawn.")} />
               </li>
             ))}
           </ul>
@@ -264,17 +333,21 @@ function Dialogs({ dialog, detail, close, run }: { dialog: Dialog | null; detail
         onConfirm={(reason) => run("cancel", reason ? { reason } : {}, "Booking cancelled. The time slot was released.")}>
         {confirmedBooking ? `This booking is confirmed. Please tell the other person why you are cancelling. ${cancelPaymentNote(detail)}` : "The request will be closed and cannot be reopened."}
       </ConfirmDialog>
+      <ConfirmDialog open={o("arrive")} title="Tell the customer you have arrived?" confirmLabel="Yes, I have arrived" onClose={close}
+        onConfirm={() => run("arrive", {}, "The customer has been told you arrived.")}>
+        The customer is notified. This is your own report: FixedItNow does not check your location.
+      </ConfirmDialog>
       <ConfirmDialog open={o("start")} title="Start this job?" confirmLabel="Start job" onClose={close}
         onConfirm={() => run("start", {}, "Job started.")}>
-        Confirm you have arrived and are starting the work.
+        Confirm you are at the address and starting the work.
+      </ConfirmDialog>
+      <ConfirmDialog open={o("mark_finished")} title="Is the work finished?" confirmLabel="Yes, the work is finished" onClose={close}
+        onConfirm={() => run("mark-finished", {}, "Marked as finished. You can pay now.")}>
+        Only continue if the job is really done, even if that is earlier than the scheduled time. This makes payment of {booking.pricing.agreedAmountBdt !== null ? formatBdt(booking.pricing.agreedAmountBdt) : "the agreed amount"} due and tells the professional. Nothing is charged yet, and you can still report a problem afterwards.
       </ConfirmDialog>
       <ConfirmDialog open={o("complete")} title="Mark the job as finished?" confirmLabel="Mark finished" onClose={close}
-        onConfirm={() => run("complete", {}, "Marked as finished. Waiting for the customer to confirm.")}>
-        The customer will be asked to confirm the work is complete.
-      </ConfirmDialog>
-      <ConfirmDialog open={o("confirm_completion")} title="Confirm the work is complete?" confirmLabel="Yes, it is complete" onClose={close}
-        onConfirm={() => run("confirm-completion", {}, "Thank you. The booking is complete.")}>
-        Only confirm if the work was done. If there is a problem, close this and use “Report a problem”.
+        onConfirm={() => run("complete", {}, "Marked as finished. The customer has been asked to pay.")}>
+        The customer is notified that payment of {booking.pricing.agreedAmountBdt !== null ? formatBdt(booking.pricing.agreedAmountBdt) : "the agreed amount"} is due. The booking completes once their payment is verified.
       </ConfirmDialog>
       <ConfirmDialog open={dialog?.kind === "accept_quote"} title="Accept this quote?" confirmLabel="Accept and confirm" onClose={close}
         onConfirm={() => (dialog?.kind === "accept_quote" ? run(`quotes/${dialog.quote.id}/accept`, { expectedTotalBdt: dialog.quote.totalBdt }, "Quote accepted. Your booking is confirmed.") : Promise.resolve())}>

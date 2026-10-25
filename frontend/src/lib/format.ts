@@ -33,12 +33,15 @@ export function formatDuration(minutes: number) {
   return [h ? `${h} hr` : "", m ? `${m} min` : ""].filter(Boolean).join(" ");
 }
 
+/** The CONFIRMED stage once the professional has reported arriving. */
+export const ARRIVED_LABEL = { label: "Professional arrived", tone: "brand" } as const;
+
 export const STATUS_LABELS: Record<BookingStatus, { label: string; tone: "neutral" | "brand" | "success" | "warning" | "danger" }> = {
   REQUESTED: { label: "Awaiting response", tone: "warning" },
   QUOTED: { label: "Quote sent", tone: "brand" },
   CONFIRMED: { label: "Confirmed", tone: "success" },
   IN_PROGRESS: { label: "In progress", tone: "brand" },
-  COMPLETION_PENDING: { label: "Awaiting confirmation", tone: "warning" },
+  COMPLETION_PENDING: { label: "Awaiting payment", tone: "warning" },
   COMPLETED: { label: "Completed", tone: "success" },
   CANCELLED: { label: "Cancelled", tone: "neutral" },
   DECLINED: { label: "Declined", tone: "neutral" },
@@ -51,9 +54,10 @@ export const EVENT_LABELS: Record<string, string> = {
   "booking.accepted": "Accepted and confirmed",
   "booking.declined": "Declined",
   "booking.cancelled": "Cancelled",
+  "booking.arrived": "Professional reported arriving",
   "booking.started": "Job started",
-  "booking.completion_requested": "Marked finished by the professional",
-  "booking.completed": "Completion confirmed",
+  "booking.completion_requested": "Work finished: payment due",
+  "booking.completed": "Payment verified: booking completed",
   "booking.expired": "Request expired",
   "quote.sent": "Quote sent",
   "quote.revised": "Quote revised",

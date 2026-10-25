@@ -12,7 +12,7 @@ For the person who deploys and operates FixedItNow. It describes what exists in 
 | **ai**: FastAPI | `rag_agent/Dockerfile` (non-root) | 8000 | the API's internal endpoints; optional OpenRouter | **no**, private network only |
 | **PostgreSQL** | managed service | 5432 | `btree_gist` extension (trusted on PG13+) | no |
 
-Not used: Redis, a queue, object storage, WebSockets, a vector database. There is **no scheduler** and **no messaging/notification service** (see AUDIT.md).
+Not used: Redis, a queue, object storage, WebSockets, a vector database. There is **no scheduler** and **no email/SMS/push notification service** (in-app notifications and the polling booking chat exist, see WORKFLOW.md).
 
 ```
 Internet --TLS--> reverse proxy / CDN --/--------------> web :3000
@@ -65,7 +65,7 @@ Using a throwaway test account (delete or ignore it afterwards) unless a step sa
 1. `GET /api/v1/health/ready` -> 200 `database: ok`; `/health/live` -> 200.
 2. `GET /` and `/services`, `/workers`, `/help` -> 200 over https; response headers include `Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options`; no `X-Powered-By`.
 3. `GET /api/v1/categories` -> 10 categories (seed ran). `GET /api/v1/internal/ai/categories` from the **public** internet -> blocked (404/401/403), never 200.
-4. Register -> the verification email **arrives** -> link logs you in -> `/account` loads. Request a password reset -> email arrives -> reset works -> old sessions end. (Verifies SMTP, SPF/DKIM and the callback origin.)
+4. Register -> the verification email with a 6-digit code **arrives** (inbox, not spam) -> entering it logs you in -> `/account` loads; the same code fails a second time. Request a password reset -> email arrives -> reset works -> old sessions end. (Verifies SMTP, SPF/DKIM and the callback origin.)
 5. If Google sign-in is enabled: "Continue with Google" completes and returns to the site (redirect URI registered exactly).
 6. Admin: `/admin/moderation` loads for the administrator and answers 403 for the test account.
 7. Publish a test professional (admin approves), search finds them, a booking request can be made and accepted.
@@ -84,7 +84,7 @@ Using a throwaway test account (delete or ignore it afterwards) unless a step sa
 
 * **Database down / pool exhausted:** readiness fails and the platform stops routing; the API fails fast (5 s connect timeout, 15 s statement timeout) instead of hanging. Check connection count vs `DATABASE_POOL_MAX` x instances; restart only after the cause is understood.
 * **Payments stuck or inconsistent:** `GET /admin/ops/status` queues -> `GET /admin/payments?status=NEEDS_ATTENTION` -> `POST /admin/payments/:reference/reconcile` (re-asks the provider; can discover a late success, cannot invent one). Never edit payment rows by hand. A payment in `REQUIRES_REVIEW` means money moved but could not be accepted automatically (amount/reference mismatch, duplicate): resolve it with the provider's merchant panel and refund through the app's refund workflow.
-* **Provider outage:** that method shows unavailable at checkout; bookings are unaffected (payment is not a booking gate). Callbacks that arrive later are verified normally; run reconcile afterwards.
+* **Provider outage:** that method shows unavailable at checkout; bookings can still be requested, accepted and worked, but finished jobs stay awaiting payment (`COMPLETION_PENDING`) and cannot be reviewed until the provider is back. Callbacks that arrive later are verified normally; run reconcile afterwards.
 * **AI outage / OpenRouter errors or spend:** the assistant falls back to rule-based mode or the user is sent to the normal search. To stop spend immediately, unset `OPENROUTER_API_KEY` on the AI service (rule-based mode), or remove `AI_SERVICE_URL` from the API (assistant reports unavailable). Rotate the OpenRouter key if it may have leaked.
 * **Suspected credential exposure:** rotate the affected secret at its provider, redeploy, and review logs. `BETTER_AUTH_SECRET` rotation signs every user out (acceptable). Service tokens rotate independently (set the new value on both sides, redeploy both). Payment credentials: rotate in the provider panel, then update the secret. Do **not** rewrite Git history to hide an exposure; rotation is the remedy.
 * **Abusive content / reports:** `/admin/moderation`; every action is audited and append-only at the database level.
@@ -92,3 +92,11 @@ Using a throwaway test account (delete or ignore it afterwards) unless a step sa
 ## 8. Known limitations an operator must know
 
 No scheduler (lazy expiry; payment reconciliation is manual or via an authenticated cron calling the admin endpoints). No in-app messaging or notifications (users are not told about booking or moderation events except by email for account actions). No identity-document verification: "Profile reviewed" is a staff review of profile text. Rate-limit and creation-cap counters for non-auth routes are per process (run one API instance, or add a shared store, before scaling out). No monitoring stack, no Terms/Privacy pages (legal text required before launch), no account deletion or data export. See AUDIT.md for the full register.
+
+
+## Admin panel operations
+
+* **First admin / lock-out recovery:** `npm run admin:grant -- you@example.com` (needs `DATABASE_URL`; audited). If every super administrator is suspended, restore one directly in SQL (`UPDATE "user" SET "suspendedAt" = NULL, "suspensionReason" = NULL WHERE email = ...`) or run the script.
+* **Audit integrity:** run Admin > Audit log > Verify (or `GET /admin/audit/verify`) on a schedule; copy `headSeq` + `headHash` to storage outside the database. A mismatch names the first bad sequence number. Restrict `TRUNCATE` and `ALTER TABLE ... DISABLE TRIGGER` on `audit_log` to a migration role the application does not use.
+* **Document key:** store `DOCUMENT_ENCRYPTION_KEY` in the secret manager and back it up separately from database backups. Documents cannot be read without it.
+* **Knowledge base:** after publishing documents press **Sync now** (or restart the AI service). `AI_KNOWLEDGE_SOURCE=api` must be set on the AI service for published documents to reach it.

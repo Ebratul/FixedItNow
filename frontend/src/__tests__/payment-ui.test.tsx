@@ -89,6 +89,29 @@ describe("payment wording comes from the server's status only", () => {
   });
 });
 
+describe("status polling", () => {
+  it("keeps polling after a failed poll and then shows the verified result (it used to stall forever)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      search = "returned=1";
+      api
+        .mockResolvedValueOnce(payment({ status: "INITIATED", succeededAt: null, providerTransactionId: null }))
+        .mockRejectedValueOnce(new Error("Network down"))
+        .mockResolvedValue(payment({ status: "SUCCEEDED" }));
+      render(<PaymentDetailView reference="FIN1" />);
+      expect(await screen.findByText("Payment status is still pending")).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(3100); // poll #1 fails
+      expect(await screen.findByText(/could not refresh this payment/i)).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(3100); // poll #2 must still happen
+      expect(await screen.findByText("Payment has been verified")).toBeInTheDocument();
+      expect(screen.queryByText(/could not refresh this payment/i)).not.toBeInTheDocument();
+      expect(api).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("refunds in the UI", () => {
   const cancelled = (over: Partial<PaymentDetail["payment"]> = {}) => payment({ refundableAmountBdt: 500, booking: { id: "b1", status: "CANCELLED", serviceName: "E", workerName: "R" }, ...over });
 
@@ -141,25 +164,23 @@ describe("checkout", () => {
       serviceArea: "Dhaka", serviceAddress: "House 12", startAt: "2026-11-04T04:00:00.000Z", endAt: "2026-11-04T05:00:00.000Z", durationMinutes: 60,
       timezone: "Asia/Dhaka", worker: { displayName: "Rahim Uddin", slug: null },
       pricing: { model: "FIXED", unitPriceBdt: 500, agreedAmountBdt: 500, currency: "BDT" },
-      confirmedAt: null, completedAt: null, cancellation: null, createdAt: "2026-11-01T06:00:00.000Z", ...booking,
+      confirmedAt: null, startWindowOpensAt: "2026-11-04T03:30:00.000Z", arrivedAt: null, startedAt: null, completionRequestedAt: null, completedAt: null, cancellation: null, createdAt: "2026-11-01T06:00:00.000Z", ...booking,
     },
-    actions: [], quotes: [], rescheduleRequests: [], dispute: null, events: [], review: { canReview: false, review: null },
+    actions: [], quotes: [], rescheduleRequests: [], dispute: null, events: [], review: { canReview: false, review: null }, chat: { state: "NOT_OPEN", reason: null },
     payment: { state: "UNPAID", canPay: true, amountBdt: 500, currency: "BDT", activeReference: null, payments: [], ...over } as BookingDetail["payment"],
   });
   const both: ProviderInfo[] = [
     { provider: "BKASH", label: "bKash", available: true, mode: "sandbox", minAmountBdt: 1, maxAmountBdt: 500000 },
-    { provider: "SSLCOMMERZ", label: "SSLCOMMERZ", available: false, mode: null, minAmountBdt: null, maxAmountBdt: null },
   ];
   const assign = vi.fn();
   beforeEach(() => {
     Object.defineProperty(window, "location", { value: { assign }, writable: true });
   });
 
-  it("shows only providers that are actually available, and never a button that cannot work", () => {
+  it("offers bKash as the only payment method, with a test-mode notice in the sandbox", () => {
     render(<Checkout detail={detail()} providers={both} />);
     expect(screen.getByRole("button", { name: /Pay ৳500 with bKash/ })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /SSLCOMMERZ/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Not available right now.")).toBeInTheDocument();
     expect(screen.getByText(/Test mode/)).toBeInTheDocument();
   });
 
@@ -183,7 +204,13 @@ describe("checkout", () => {
       api.mockResolvedValue({ payment: payment().payment, checkoutUrl: bad });
       const { unmount } = render(<Checkout detail={detail()} providers={both} />);
       fireEvent.click(screen.getByRole("button", { name: /Pay ৳500 with bKash/ }));
-      await screen.findByText("That attempt has already finished");
+      if (bad === null) {
+        await screen.findByText("That attempt has already finished"); // a replay of a finished attempt
+      } else {
+        // A URL we will not follow is an error, not "already finished" (which would hide the real problem).
+        await screen.findByText(/could not open the payment page safely/);
+        expect(screen.queryByText("That attempt has already finished")).not.toBeInTheDocument();
+      }
       expect(assign).not.toHaveBeenCalled();
       unmount();
     }

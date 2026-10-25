@@ -21,7 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import ConfigError, Settings, load_settings
-from app.knowledge import KnowledgeBase
+from app.knowledge import KnowledgeBase, KnowledgeError
 from app.limits import RateLimiter
 from app.llm.base import LLMClient, LLMError
 from app.llm.openrouter import OpenRouterClient
@@ -46,10 +46,16 @@ def create_app(
     http: httpx.AsyncClient | None = None,
 ) -> FastAPI:
     cfg = settings or load_settings()
-    knowledge = KnowledgeBase.load(cfg.knowledge_dir)
+    state: dict[str, Any] = {"knowledge": KnowledgeBase.load(cfg.knowledge_dir)}
+    reload_lock = asyncio.Lock()
     limiter = RateLimiter(cfg.rate_limit_per_minute)
     gate = asyncio.Semaphore(cfg.max_concurrent_requests)
-    state: dict[str, Any] = {}
+
+    async def load_knowledge(marketplace: MarketplaceClient) -> KnowledgeBase:
+        """Build a fresh index from the configured source. Raises KnowledgeError / MarketplaceError."""
+        if cfg.knowledge_source == "api":
+            return KnowledgeBase.from_documents(await marketplace.knowledge_documents())
+        return KnowledgeBase.load(cfg.knowledge_dir)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -59,7 +65,15 @@ def create_app(
             model = OpenRouterClient(cfg, client)
         if model is None:
             log.warning("OpenRouter is not configured: running in simple (non-LLM) mode")
-        state["pipeline"] = Pipeline(model, MarketplaceClient(cfg, client), knowledge, cfg.max_results)
+        marketplace = MarketplaceClient(cfg, client)
+        if cfg.knowledge_source == "api":
+            try:
+                state["knowledge"] = await load_knowledge(marketplace)
+            except (KnowledgeError, MarketplaceError):
+                # The bundled files keep the assistant useful until an administrator syncs.
+                log.warning("Admin-managed knowledge could not be loaded: using the bundled files for now")
+        state["marketplace"] = marketplace
+        state["pipeline"] = Pipeline(model, marketplace, state["knowledge"], cfg.max_results)
         state["llm"] = model
         try:
             yield
@@ -104,8 +118,30 @@ def create_app(
         return {
             "status": "ok",
             "llm": "configured" if state.get("llm") is not None else "not_configured",
-            "knowledgeChunks": len(knowledge.chunks),
+            "knowledgeChunks": len(state["knowledge"].chunks),
         }
+
+    def knowledge_summary() -> dict[str, object]:
+        kb: KnowledgeBase = state["knowledge"]
+        return {"source": kb.source, "documents": len({c.doc_id for c in kb.chunks}), "chunks": len(kb.chunks), "digest": kb.digest}
+
+    @app.get("/v1/knowledge", dependencies=[Depends(require_service)])
+    async def knowledge_status() -> dict[str, object]:
+        """What the running index was built from (for the admin panel). No document text."""
+        return {**knowledge_summary(), "configuredSource": cfg.knowledge_source}
+
+    @app.post("/v1/knowledge/reload", dependencies=[Depends(require_service)])
+    async def knowledge_reload() -> Any:
+        """Rebuild the index from the configured source and swap it in atomically. On any failure the
+        previous index keeps serving and nothing is partially applied."""
+        async with reload_lock:
+            try:
+                fresh = await load_knowledge(state["marketplace"])
+            except (KnowledgeError, MarketplaceError):
+                return _error(502, "KNOWLEDGE_UNAVAILABLE", "The knowledge source could not be read or was not valid. The previous knowledge is still in use.")
+            state["knowledge"] = fresh
+            state["pipeline"].knowledge = fresh
+        return {**knowledge_summary(), "configuredSource": cfg.knowledge_source}
 
     @app.post("/v1/chat", response_model=ChatResponse, response_model_by_alias=True, dependencies=[Depends(require_service)])
     async def chat(

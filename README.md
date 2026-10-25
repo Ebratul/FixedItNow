@@ -31,7 +31,7 @@ cp .env.example .env.local
 npm install && npm run dev         # http://localhost:3000
 ```
 
-In development, verification and password-reset links are printed in the backend terminal.
+In development, the email verification code and password-reset links are printed in the backend terminal. Sign-in methods (Google and email + one-time code) are documented in [docs/AUTH.md](docs/AUTH.md).
 
 Checks: `npm run lint`, `npm run typecheck`, `npm test` in each of `frontend/` and `backend/`;
 `npm run test:e2e` in `backend/` (needs a disposable `*_test` database); `pytest`, `ruff check .`, `mypy` and `python -m evals.run_eval` in `rag_agent/` (see [docs/AI.md](docs/AI.md)).
@@ -43,7 +43,7 @@ See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md). The public websi
 implemented, along with public service categories, a searchable professional directory, public profiles,
 and favorites (professionals appear only after an admin approves and the owner publishes). Customers can request bookings, receive quotes,
 reschedule, cancel and open disputes, and workers manage availability ([docs/BOOKINGS.md](docs/BOOKINGS.md)).
-Customers can pay a confirmed booking through bKash or SSLCOMMERZ and request refunds ([docs/PAYMENTS.md](docs/PAYMENTS.md)): the code is in place and tested against mocked providers, but **neither provider has been run against its real sandbox**, so each stays disabled until you configure credentials. Worker payouts, messaging, notifications, a general admin dashboard UI (only the moderation console exists), and identity-document verification are not built yet, and the UI says so rather than faking them. Google sign-in and
+Customers can pay a confirmed booking through bKash and request refunds ([docs/PAYMENTS.md](docs/PAYMENTS.md)): the code is in place and tested against mocked providers, but **bKash has only been exercised against its sandbox by hand, not end to end with a real wallet**, and stays disabled until you configure credentials. Worker payouts, messaging, notifications, a general admin dashboard UI (only the moderation console exists), and identity-document verification are not built yet, and the UI says so rather than faking them. Google sign-in and
 real email delivery need your own credentials and have not been verified against the real services.
 
 Customers can also describe a need in natural language at `/assistant` ([docs/AI.md](docs/AI.md)): a separate Python service turns the request into filters and the API shows real, database-verified professionals. It is implemented and tested with mocks and a fake model; **no real OpenRouter request or real model has been tested**, so it needs your key and model choice, and it stays off until configured. The normal search is unaffected.
@@ -52,4 +52,6 @@ Customers can review a completed booking (one per booking, editable for 14 days)
 
 Operations: the final audit ([docs/AUDIT.md](docs/AUDIT.md)) records what was verified and what blocks a production launch (no real payment provider, email, OAuth or OpenRouter run has happened; messaging and notifications do not exist). [docs/RUNBOOK.md](docs/RUNBOOK.md) covers deployment, backup/restore, rollback and incident handling. Container images, a disposable staging stack and a CI workflow are provided; **nothing has been deployed**.
 
-Docs: [AUDIT](docs/AUDIT.md) · [RUNBOOK](docs/RUNBOOK.md) · [COMMUNITY](docs/COMMUNITY.md) · [AI](docs/AI.md) · [PAYMENTS](docs/PAYMENTS.md) · [BOOKINGS](docs/BOOKINGS.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [API](docs/API.md) · [SECURITY](docs/SECURITY.md) · [DEPLOYMENT](docs/DEPLOYMENT.md)
+Admin panel: roles and granular permissions, user/worker/booking/payment/support/content/AI-knowledge management, tamper-evident audit log and platform settings; see [docs/ADMIN.md](docs/ADMIN.md).
+
+Docs: [ADMIN](docs/ADMIN.md) · [AUDIT](docs/AUDIT.md) · [RUNBOOK](docs/RUNBOOK.md) · [COMMUNITY](docs/COMMUNITY.md) · [AI](docs/AI.md) · [PAYMENTS](docs/PAYMENTS.md) · [BOOKINGS](docs/BOOKINGS.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [API](docs/API.md) · [SECURITY](docs/SECURITY.md) · [DEPLOYMENT](docs/DEPLOYMENT.md)

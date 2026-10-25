@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Noto_Sans_Bengali, Plus_Jakarta_Sans } from "next/font/google";
+import { HideOnAdmin } from "@/components/layout/hide-on-admin";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { SiteBanners } from "@/components/notifications/site-banners";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -52,10 +55,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Skip to main content
         </a>
         <SiteHeader />
+        <SiteBanners />
         <main id="main" className="flex-1">
           {children}
         </main>
-        <SiteFooter />
+        <Suspense fallback={<SiteFooter />}>
+          <HideOnAdmin>
+            <SiteFooter />
+          </HideOnAdmin>
+        </Suspense>
       </body>
     </html>
   );

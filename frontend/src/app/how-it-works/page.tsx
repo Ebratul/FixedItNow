@@ -23,7 +23,7 @@ export default function HowItWorksPage() {
       <PageHeader
         crumbs={[{ label: "Home", href: "/" }, { label: "How it works" }]}
         title="How FixedItNow works"
-        description="The customer journey from search to review. In-app messaging and notifications are not available yet."
+        description="The customer journey from search to review: book, chat once accepted, pay after the work is done, then review. Notifications are shown in the app only (no email or SMS)."
       />
       <section className="section-y" aria-label="Steps">
         <div className="container-page">

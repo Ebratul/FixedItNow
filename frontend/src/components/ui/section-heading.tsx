@@ -28,7 +28,11 @@ export function SectionHeading({
     >
       <div className={cn("max-w-2xl", centered && "mx-auto")}>
         {eyebrow && (
-          <p className="mb-2 text-sm font-semibold tracking-wide text-accent-700 uppercase">
+          <p className="eyebrow mb-3 text-accent-700">
+            <span
+              aria-hidden
+              className="h-0.5 w-6 rounded-full bg-accent-500"
+            />
             {eyebrow}
           </p>
         )}

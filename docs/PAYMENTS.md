@@ -1,4 +1,15 @@
-# Payments, bKash, SSLCOMMERZ and refunds (Step 6)
+# Payments, bKash and refunds (Step 6)
+
+> **SSLCOMMERZ was removed (2026-10-25).** bKash is the only payment provider. Sections below that still mention SSLCOMMERZ
+> are historical and describe code that no longer exists. The `SSLCOMMERZ` value stays in the database enum only so old rows
+> stay valid; nothing creates it.
+>
+> **bKash sandbox facts found on 2026-10-25** (grant-token, create payment and a bKash checkout URL were run against
+> `https://tokenized.sandbox.bka.sh/v2/tokenized-checkout`; execute, query and refunds were **not** run against bKash):
+> * `BKASH_BASE_URL` must be the **v2** base `https://tokenized.sandbox.bka.sh/v2/tokenized-checkout`. The older
+>   `.../v1.2.0-beta` base uses different paths (`/tokenized/checkout/...`) and answers `Missing Authentication Token` here.
+> * The sandbox `id_token` is about 880 characters and the checkout URL (host `sandbox.payment.bkash.com`) about 215; the
+>   adapter used to reject anything over 200 characters, which made every payment fail with `TOKEN_UNAVAILABLE`.
 
 This is the single description of how payments work. Code: `backend/src/payments/`. It describes what the code does, and it separates what
 was **tested against mocks** from what was **verified with a real provider**. Nothing here was verified with a real provider.
@@ -22,7 +33,7 @@ The SRS and Step 5 do not define a payment policy beyond FR-PAY-01..12, so these
 
 | Question | What the code does |
 | --- | --- |
-| When is payment required? | **It is not a gate.** Step 5 confirms a booking without payment and that is preserved. A customer *may* pay once the booking is `CONFIRMED`, `IN_PROGRESS`, `COMPLETION_PENDING` or `COMPLETED`. Never while requested/quoted/cancelled/declined/expired/disputed. |
+| When is payment required? | **Payment is the gate for completion and reviews, not for confirmation.** A booking is confirmed without payment. The customer pays **after the professional reports the work finished** (`COMPLETION_PENDING` = "payment due"); payment is refused in every other status (`422 BOOKING_NOT_PAYABLE`), except `COMPLETED` for the one case of a disputed job an administrator completed without payment. A **verified** payment moves `COMPLETION_PENDING` to `COMPLETED` in the same transaction (see "Payment completes the booking" below). |
 | Full, deposit or partial? | **Full payment of the agreed price only.** No deposits or instalments. |
 | Amount | `booking.agreedAmountBdt` (fixed/hourly price computed at acceptance, or the accepted quote total). Never from the client. Currency is `BDT` only (CHECK-constrained). |
 | Multiple attempts? | Sequentially. At most **one open attempt per booking** (database-enforced). A new attempt is allowed after the previous one is `FAILED`, `CANCELLED` or `EXPIRED`. Max 10 attempts per booking per hour. |
@@ -142,6 +153,12 @@ Flow: session `POST /gwprocess/v4/api.php` -> customer pays on the hosted page -
 * `risk_level = 1` is parked as `REQUIRES_REVIEW (PROVIDER_RISK_FLAG)` (the docs say the merchant should review such transactions).
 * **The IPN `verify_sign`/`verify_key` hash is not implemented**: the official page does not state the algorithm or secret, and we do not guess one. The IPN is treated as a hint that triggers the Validation API, which is what the page requires anyway.
 * The IPN always gets a plain `200 OK` (even for unknown references, so nothing leaks); a transient internal error returns `500` so SSLCOMMERZ retries.
+
+### Payment completes the booking
+
+`applyCompleted` is the only code that turns a provider report into `SUCCEEDED`. Inside that same transaction (booking row locked first, then the payment row) it also runs the booking state-machine action `payment_verified` (system role only) when the booking is `COMPLETION_PENDING`: `completedAt` is stamped and a `booking.completed` history event is written. Any other booking status is left alone: a late payment on a `DISPUTED` or `CANCELLED` booking is recorded as `SUCCEEDED` with `reviewReason = BOOKING_INELIGIBLE`, never revives it, and needs an administrator. A browser redirect, `?status=success`, or a forged callback never reaches this code path as proof: the booking completes only after the provider's own query API confirmed reference, amount and currency. Customer and professional are notified **after** the commit (best effort; a failed notification never undoes the payment).
+
+Because payment now happens after the work, a paid booking can no longer be cancelled by the customer. The self-service refund route ("the booking is `CANCELLED`") is therefore reached through a dispute whose administrator outcome is `CANCEL_BOOKING`. This is a consequence of the workflow, not a refund policy: there is still no fee, deadline or automatic refund.
 
 ### Comparison rules (`PaymentsService.applyCompleted`)
 

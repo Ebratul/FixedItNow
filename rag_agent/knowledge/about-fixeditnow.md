@@ -16,4 +16,4 @@ Approval of a profile is a review by FixedItNow staff. It is not a government ba
 
 # What the platform does not show yet
 
-Ratings and reviews are not available yet, so no rating is shown for any professional. Distance or map search is not available: location is matched by division (for example Dhaka or Sylhet) and the professional's listed service areas.
+Ratings are shown only from reviews left by customers whose booking was completed and paid (the payment verified). A professional with no such reviews shows no rating. Distance or map search is not available: location is matched by division (for example Dhaka or Sylhet) and the professional's listed service areas.

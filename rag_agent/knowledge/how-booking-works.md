@@ -20,7 +20,7 @@ A professional's availability is confirmed only through this booking flow. Searc
 
 # Progress of a job
 
-A confirmed booking moves to in progress when the professional starts the job, then waits for your confirmation after the professional marks the work complete. Only you, the customer, can confirm completion.
+Once the professional accepts, you and the professional can message each other from the booking page. The professional can tell you they have arrived (this is their own report; the platform does not check their location), start the job, and mark the work finished. Marking the work finished makes the payment due; it does not complete the booking. The booking is completed only after your payment has been verified with the payment provider. After that you can leave a rating and review.
 
 # Who sees what
 

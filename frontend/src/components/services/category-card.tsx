@@ -15,9 +15,9 @@ export function CategoryCard({
   const { name, description, slug, workerCount } = category;
   const Heading = `h${headingLevel}` as const;
   return (
-    <Card interactive className="h-full">
+    <Card interactive className="h-full overflow-hidden">
       <Link href={`/services/${slug}`} className="group flex h-full flex-col p-5">
-        <span className="flex size-11 items-center justify-center rounded-control bg-brand-100 text-brand-700 transition-colors group-hover:bg-brand-700 group-hover:text-white">
+        <span className="flex size-12 items-center justify-center rounded-card bg-gradient-to-br from-brand-50 to-brand-200 text-brand-700 shadow-card ring-1 ring-brand-200/70 transition-all duration-200 group-hover:from-brand-600 group-hover:to-brand-800 group-hover:text-white group-hover:ring-brand-700">
           <CategoryIcon slug={slug} className="size-6" />
         </span>
         <Heading className="mt-4 text-base font-bold text-ink">{name}</Heading>

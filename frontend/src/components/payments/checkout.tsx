@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { CreditCard, ShieldCheck } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthGate } from "@/components/account/auth-gate";
 import { StatusBadge } from "@/components/bookings/status-badge";
 import { Alert } from "@/components/ui/alert";
@@ -43,6 +43,16 @@ export function Checkout({ detail, providers }: { detail: BookingDetail; provide
   const [error, setError] = useState<string>();
   const [staleRef, setStaleRef] = useState<string>();
 
+  // Coming back from the provider with the browser's Back button can restore this page from the bfcache with the
+  // button still "busy" (the script never got to reset it); unlock it.
+  useEffect(() => {
+    const unlock = (event: PageTransitionEvent) => {
+      if (event.persisted) setBusy(null);
+    };
+    window.addEventListener("pageshow", unlock);
+    return () => window.removeEventListener("pageshow", unlock);
+  }, []);
+
   if (booking.viewerRole !== "CUSTOMER" || !("canPay" in payment)) {
     return <EmptyState icon={CreditCard} headingLevel={1} title="Only the customer pays" action={<LinkButton href={`/bookings/${booking.id}`}>Back to the booking</LinkButton>}>Payments for a booking are made by the customer who booked it.</EmptyState>;
   }
@@ -68,8 +78,14 @@ export function Checkout({ detail, providers }: { detail: BookingDetail; provide
         window.location.assign(res.checkoutUrl); // the provider's own page; nothing is assumed paid
         return;
       }
-      // Replay of a request that already finished: send the customer to its real status.
-      setStaleRef(res.payment.reference);
+      if (res.checkoutUrl) {
+        // A URL we refuse to follow is a failure, not "already finished". The payment stays unpaid.
+        keys.current[provider] = undefined;
+        setError("We could not open the payment page safely, so nothing was charged. Please try again, or choose another method.");
+      } else {
+        // Replay of a request that already finished: send the customer to its real status.
+        setStaleRef(res.payment.reference);
+      }
     } catch (e) {
       keys.current[provider] = undefined; // a failed attempt must not be replayed
       setError(e instanceof ApiError || e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -85,7 +101,7 @@ export function Checkout({ detail, providers }: { detail: BookingDetail; provide
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-h1 font-extrabold text-brand-950">Pay for your booking</h1>
-          <StatusBadge status={booking.status} />
+          <StatusBadge status={booking.status} arrivedAt={booking.arrivedAt} />
         </div>
         <p className="mt-2 text-lg text-ink-muted">{booking.category.name} with {booking.worker.displayName}</p>
       </div>
@@ -109,7 +125,7 @@ export function Checkout({ detail, providers }: { detail: BookingDetail; provide
       ) : payment.state === "UNDER_REVIEW" ? (
         <Alert tone="warning" title="A payment for this booking is being reviewed">Please do not pay again. {paymentLink(payment.payments.find((p) => p.status === "REQUIRES_REVIEW"))}</Alert>
       ) : !payment.canPay ? (
-        <Alert tone="info" title="This booking cannot be paid right now">It has to be confirmed by the professional first, and it cannot be cancelled or on hold.</Alert>
+        <Alert tone="info" title="This booking cannot be paid right now">You can pay once the professional has marked the work as finished. A cancelled booking or one on hold cannot be paid.</Alert>
       ) : (
         <section aria-labelledby="methods-heading" className="space-y-4">
           <h2 id="methods-heading" className="text-h2 font-extrabold">Choose how to pay</h2>

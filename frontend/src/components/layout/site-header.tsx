@@ -8,7 +8,7 @@ import { ServicesMenu } from "./services-menu";
 import { UserMenu } from "./user-menu";
 
 const linkClasses =
-  "inline-flex min-h-11 items-center rounded-control px-3 text-sm font-semibold text-ink-muted transition-colors hover:bg-surface-strong hover:text-ink";
+  "inline-flex min-h-11 items-center rounded-control px-3 text-sm font-semibold text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-800";
 
 /**
  * Active-link styling needs the current pathname, which is unknown when
@@ -30,7 +30,7 @@ function StaticNav() {
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-canvas/95 backdrop-blur supports-[backdrop-filter]:bg-canvas/85">
+    <header className="sticky top-0 z-40 border-b border-line bg-canvas/95 shadow-card backdrop-blur supports-[backdrop-filter]:bg-canvas/80">
       <div className="container-page flex h-16 items-center justify-between gap-4">
         <Logo />
 
@@ -44,7 +44,7 @@ export function SiteHeader() {
                   key={link.href}
                   href={link.href}
                   className={linkClasses}
-                  activeClassName="text-brand-800"
+                  activeClassName="bg-brand-50 text-brand-800"
                 >
                   {link.label}
                 </NavLink>

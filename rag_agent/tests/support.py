@@ -76,6 +76,8 @@ class FakeMarketplace:
         self.rogue = rogue
         self.down = down
         self.requests: list[httpx.Request] = []
+        # Admin-managed knowledge served by GET /internal/ai/knowledge (None = the endpoint answers 404).
+        self.knowledge_docs: list[dict[str, Any]] | None = None
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -84,6 +86,10 @@ class FakeMarketplace:
         if self.down:
             return httpx.Response(503, json={"message": "down"})
         path = request.url.path
+        if path.endswith("/internal/ai/knowledge"):
+            if self.knowledge_docs is None:
+                return httpx.Response(404, json={})
+            return httpx.Response(200, json={"documents": self.knowledge_docs})
         if path.endswith("/internal/ai/categories"):
             return httpx.Response(200, json={"categories": CATEGORIES})
         if path.endswith("/internal/ai/workers"):

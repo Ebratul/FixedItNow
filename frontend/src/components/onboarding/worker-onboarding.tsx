@@ -9,6 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CheckboxGroup } from "@/components/ui/checkbox-group";
+import { IdentityDocuments } from "@/components/onboarding/identity-documents";
 import { ErrorState } from "@/components/ui/error-state";
 import { SelectInput } from "@/components/ui/select-input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,18 +21,21 @@ import { DIVISIONS } from "@/lib/locations";
 import { useApi, type Me, type WorkerProfile } from "@/lib/use-api";
 import {
   draftFromProfile,
+  flattenCategories,
   LANGUAGES,
   MAX_SERVICES,
   payloadForStep,
   PRICING_MODELS,
   STEP_TITLES,
   validateStep,
+  type CategoryOption,
   type PricingModel,
   type ServiceDraft,
   type WorkerDraft,
 } from "@/lib/worker-onboarding";
 
-type Category = { slug: string; name: string; description: string };
+type Category = CategoryOption;
+type CategoryTree = { slug: string; name: string; description: string; subcategories?: CategoryTree[] };
 
 export function WorkerOnboarding() {
   return (
@@ -40,7 +44,7 @@ export function WorkerOnboarding() {
 }
 
 function Loader({ me, onChanged }: { me: Me; onChanged: () => void }) {
-  const { state, reload } = useApi<{ categories: Category[] }>("/categories");
+  const { state, reload } = useApi<{ categories: CategoryTree[] }>("/categories");
   if (state.status === "loading") return <Skeleton className="h-96" />;
   if (state.status !== "ready") {
     return (
@@ -49,7 +53,7 @@ function Loader({ me, onChanged }: { me: Me; onChanged: () => void }) {
       </ErrorState>
     );
   }
-  return <Flow me={me} categories={state.data.categories} onChanged={onChanged} />;
+  return <Flow me={me} categories={flattenCategories(state.data.categories)} onChanged={onChanged} />;
 }
 
 function Flow({ me, categories, onChanged }: { me: Me; categories: Category[]; onChanged: () => void }) {
@@ -156,9 +160,13 @@ function StatusView({
           <PublicationCard profile={profile} onChanged={onChanged} />
         )}
         <Alert tone="info" className="mt-4">
-          Approval here means a reviewer checked your profile. Identity document verification is not
-          available yet.
+          Approval here means a reviewer checked your profile and any identity documents you uploaded.
         </Alert>
+        {profile.verificationStatus !== "VERIFIED" && (
+          <div className="mt-4">
+            <IdentityDocuments />
+          </div>
+        )}
         <div className="mt-6 flex flex-wrap gap-3">
           <Button onClick={onEdit} variant={canResubmit ? "primary" : "secondary"}>
             {canResubmit ? "Edit and resubmit" : "Edit details"}
@@ -314,6 +322,7 @@ function Wizard({
             />
           )}
           {step === 5 && <ReviewStep draft={draft} categories={categories} />}
+          {step === 5 && <IdentityDocuments />}
 
           {formError && <Alert tone="error">{formError}</Alert>}
 
@@ -534,7 +543,7 @@ function ReviewStep({ draft, categories }: { draft: WorkerDraft; categories: Cat
       </dl>
       <Alert tone="info" title="What happens next">
         Submitting sends your profile to a reviewer. It is not approved or listed automatically, and
-        you can still edit it. Identity document verification isn&apos;t available yet.
+        you can still edit it. Identity documents are covered in the section below: it says whether they are required or optional.
       </Alert>
     </>
   );

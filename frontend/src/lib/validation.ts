@@ -30,6 +30,20 @@ export const registerSchema = z
     message: "Passwords do not match",
   });
 
+/** Length of the emailed verification code (the server is the authority). */
+export const OTP_LENGTH = 6;
+/** Seconds before another code can be requested (the server enforces its own per-address cooldown). */
+export const RESEND_SECONDS = 60;
+
+/** Keep digits only, at most OTP_LENGTH of them (pasted "123 456" or "123-456" works). */
+export const cleanCode = (value: string) => value.replace(/\D/g, "").slice(0, OTP_LENGTH);
+
+export const verifyEmailSchema = z.object({
+  email,
+  password: z.string().min(1, "Enter the password you chose"),
+  code: z.string().regex(new RegExp(`^\\d{${OTP_LENGTH}}$`), `Enter the ${OTP_LENGTH}-digit code`),
+});
+
 export const forgotPasswordSchema = z.object({ email });
 
 export const resetPasswordSchema = z

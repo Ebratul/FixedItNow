@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, IconButton, LinkButton } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { useMe } from "@/lib/use-api";
 import { authClient } from "@/lib/auth-client";
 import { AUTH_LINKS, PRIMARY_NAV } from "@/lib/site";
 import { NavLink } from "./nav-link";
@@ -53,6 +54,13 @@ export function MobileNav() {
               <LinkButton href="/account" variant="secondary" onClick={close}>
                 My account
               </LinkButton>
+              <LinkButton href="/account/notifications" variant="secondary" onClick={close}>
+                Notifications
+              </LinkButton>
+              <LinkButton href="/account/support" variant="secondary" onClick={close}>
+                Support
+              </LinkButton>
+              {open && <MobileAdminLink onNavigate={close} />}
               <Button onClick={logOut}>Log out</Button>
             </div>
           ) : (
@@ -68,5 +76,16 @@ export function MobileNav() {
         </div>
       </Dialog>
     </>
+  );
+}
+
+/** Admin entry for administrators; mounted only while the menu is open for a signed-in user. */
+function MobileAdminLink({ onNavigate }: { onNavigate: () => void }) {
+  const { state } = useMe();
+  if (state.status !== "ready" || !state.data.isAdmin) return null;
+  return (
+    <LinkButton href="/admin" variant="secondary" onClick={onNavigate}>
+      Admin panel
+    </LinkButton>
   );
 }

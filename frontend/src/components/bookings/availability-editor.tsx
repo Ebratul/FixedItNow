@@ -45,7 +45,8 @@ export function validateDays(days: Win[][]): (string | undefined)[] {
   });
 }
 
-function Editor({ initial, reload }: { initial: MyAvailability; reload: () => void }) {
+/** `refresh` refetches without unmounting, so unsaved working-hours edits survive adding or removing time off. */
+function Editor({ initial, refresh }: { initial: MyAvailability; refresh: () => void }) {
   const [days, setDays] = useState<Win[][]>(() => toDays(initial));
   const [problems, setProblems] = useState<(string | undefined)[]>([]);
   const [saving, setSaving] = useState(false);
@@ -87,7 +88,7 @@ function Editor({ initial, reload }: { initial: MyAvailability; reload: () => vo
     try {
       await api("/me/time-off", { method: "POST", body: { startAt: dhakaLocalToIso(offStart), endAt: dhakaLocalToIso(offEnd), ...(offNote.trim() && { note: offNote.trim() }) } });
       setOffStart(""); setOffEnd(""); setOffNote("");
-      reload();
+      refresh();
     } catch (e) {
       setOffError(e instanceof Error ? e.message : "Could not add time off.");
     } finally {
@@ -97,7 +98,7 @@ function Editor({ initial, reload }: { initial: MyAvailability; reload: () => vo
   async function removeTimeOff(id: string) {
     try {
       await api(`/me/time-off/${id}`, { method: "DELETE" });
-      reload();
+      refresh();
     } catch (e) {
       setOffError(e instanceof Error ? e.message : "Could not remove it.");
     }
@@ -180,14 +181,14 @@ function TimeSelect({ id, label: aria, value, onChange, min = 0, max = 1440 }: {
 }
 
 function Loader() {
-  const { state, reload } = useApi<MyAvailability>("/me/availability");
+  const { state, reload, refresh } = useApi<MyAvailability>("/me/availability");
   if (state.status === "loading" || state.status === "unauthenticated") return <Skeleton className="h-96 max-w-3xl" />;
   if (state.status === "error") {
     return /worker profile/i.test(state.message)
       ? <EmptyState icon={CalendarClock} headingLevel={2} title="Set up your worker profile first" action={<LinkButton href="/onboarding/worker">Start worker profile</LinkButton>}>Working hours belong to your professional profile.</EmptyState>
       : <ErrorState action={<Button onClick={reload}>Try again</Button>}>{state.message}</ErrorState>;
   }
-  return <Editor initial={state.data} reload={reload} />;
+  return <Editor initial={state.data} refresh={refresh} />;
 }
 
 export function AvailabilityEditor() {

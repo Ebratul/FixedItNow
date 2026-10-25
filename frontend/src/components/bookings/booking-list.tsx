@@ -81,7 +81,7 @@ function List({ role, group, page, onPage }: { role: "customer" | "worker"; grou
                   <p className="mt-2 text-sm font-medium text-ink">{formatRange(b.startAt, b.endAt)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <StatusBadge status={b.status} />
+                  <StatusBadge status={b.status} arrivedAt={b.arrivedAt} />
                   {b.agreedAmountBdt !== null ? (
                     <span className="text-sm font-semibold">{formatBdt(b.agreedAmountBdt)}</span>
                   ) : b.pricingModel === "QUOTE" ? (

@@ -36,4 +36,13 @@ describe("api", () => {
     expect(error.status).toBe(0);
     expect(error.message).toMatch(/reach the server/i);
   });
+
+  it("shows the platform's own message for maintenance and suspension, but never a raw 5xx body", async () => {
+    respond(503, { code: "MAINTENANCE", message: "Back at 6pm" });
+    expect(((await api("/x", { method: "POST", body: {} }).catch((e) => e)) as ApiError).message).toBe("Back at 6pm");
+    respond(403, { code: "ACCOUNT_SUSPENDED", message: "This account has been suspended. Please contact support." });
+    expect(((await api("/x").catch((e) => e)) as ApiError).message).toMatch(/suspended/);
+    respond(503, { message: "upstream said: connection string postgres://..." });
+    expect(((await api("/x").catch((e) => e)) as ApiError).message).not.toMatch(/postgres/);
+  });
 });
