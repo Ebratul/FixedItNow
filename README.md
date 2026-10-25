@@ -14,6 +14,8 @@ Find a verified electrician, plumber, cleaner or technician, book them, chat, pa
 ![FastAPI](https://img.shields.io/badge/FastAPI-Python%203.12-009688?logo=fastapi&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 
+### 🌐 [Live demo: fixeditnowwithragagent-web.vercel.app](https://fixeditnowwithragagent-web.vercel.app)
+
 [Requirements](docs/SRS.md) · [Architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) · [Deployment](docs/DEPLOYMENT.md) · [Audit](docs/AUDIT.md)
 
 </div>
@@ -51,6 +53,29 @@ Find a verified electrician, plumber, cleaner or technician, book them, chat, pa
 ```
 
 The AI service never touches the database and is never called by browsers. It only extracts intent and phrases answers from curated knowledge; the API re-reads workers from PostgreSQL before showing anything.
+
+### Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Web | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS |
+| API | NestJS 12, Prisma 7, Zod validation, Helmet, rate limiting |
+| Auth | Better Auth (server-side sessions in PostgreSQL, Google OAuth, email OTP) |
+| Database | PostgreSQL 16 (exclusion constraints prevent double-booking; append-only audit tables) |
+| AI | FastAPI (Python 3.12), optional OpenRouter model, optional Pinecone for the knowledge base |
+| Payments | bKash, SSLCOMMERZ |
+| Testing | Vitest, pytest, real-Chrome end-to-end checks with axe accessibility audits |
+
+### User roles
+
+| Role | Can do |
+| --- | --- |
+| **Visitor** | Browse services, professionals and public profiles |
+| **Customer** | Search, favourite, book, chat, pay, review, report content |
+| **Worker** | Build a profile, set availability, send quotes, manage bookings (visible only after admin approval) |
+| **Admin** | Approve workers, moderate content, manage payments, support and the AI knowledge base, with granular permissions |
+
+One account can be both a customer and a worker. Admin rights can only be granted from the server with `npm run admin:grant`, never through the API.
 
 ### Repository layout
 
@@ -101,6 +126,15 @@ In development the email verification code and password-reset links are printed 
 
 CI runs these in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
+## 🔒 Security highlights
+
+- Passwords hashed with scrypt; sessions are `HttpOnly` cookies backed by the database, so revoking one takes effect immediately.
+- Default-deny authentication guard, roles read from the database on every request, and strict schemas that reject unexpected fields (IDOR protection).
+- Identical responses for known and unknown emails (no account enumeration), Google sign-in with state and PKCE, origin checks on unsafe requests.
+- Server-side Zod validation everywhere, Helmet headers, rate limiting, and a tamper-evident audit log.
+
+Full details: [docs/SECURITY.md](docs/SECURITY.md).
+
 ## 📍 Project status
 
 The project is **ready for staging, not for production** (see [docs/AUDIT.md](docs/AUDIT.md)).
@@ -117,7 +151,7 @@ The project is **ready for staging, not for production** (see [docs/AUDIT.md](do
 
 ## 🚢 Deployment
 
-The three services are deployable as separate projects (for example on Vercel) or as containers. Dockerfiles, a disposable staging stack and a runbook for deployment, backup/restore, rollback and incident handling are provided: [docs/RUNBOOK.md](docs/RUNBOOK.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Behind a reverse proxy, set `TRUSTED_PROXIES` so rate limiting sees real client IPs ([docs/SECURITY.md](docs/SECURITY.md)).
+The web app is live at **https://fixeditnowwithragagent-web.vercel.app**. The three services are deployable as separate projects (for example on Vercel) or as containers. Dockerfiles, a disposable staging stack and a runbook for deployment, backup/restore, rollback and incident handling are provided: [docs/RUNBOOK.md](docs/RUNBOOK.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Behind a reverse proxy, set `TRUSTED_PROXIES` so rate limiting sees real client IPs ([docs/SECURITY.md](docs/SECURITY.md)).
 
 ## 📚 Documentation
 
