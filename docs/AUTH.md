@@ -9,7 +9,7 @@ Customer/Worker is chosen at onboarding after sign-in. Nobody can self-assign Ad
 and the only way to become admin is the operator script `npm run admin:grant`.
 
 > **Status.** Everything below is implemented and tested against a real PostgreSQL database, a stubbed Google token
-> endpoint and a console mail sink. **Real Google login and real email delivery have not been exercised**, because
+> endpoint and a console mail sink (the SMTP transport itself is covered by a mocked/failing-server unit test). **Real Google login and real email delivery have not been exercised**, because
 > no Google credentials or SMTP provider were available. Treat both as unverified until you run the checklist in
 > [Go-live checks](#go-live-checks).
 
@@ -121,19 +121,38 @@ The redirect URI uses the **web app's** origin because the web app proxies `/api
 * A sender on a domain you control with **SPF and DKIM** (and ideally DMARC) configured, otherwise codes land in spam.
 * Port 587 with STARTTLS (`SMTP_SECURE=false`) or 465 (`SMTP_SECURE=true`).
 * Transactional stream/low latency: codes expire in 10 minutes and the resend cooldown is 60 s.
-* The API must actually await/complete the send. It is a long-running Node server, so this is automatic. **If you ever run the API as Vercel Functions**, enable Better Auth `advanced.backgroundTasks` with `waitUntil`, or the function may freeze before the email leaves.
+* The send must be allowed to finish after the response. Request handlers call `MailService.sendInBackground`, which
+  starts the send without delaying the response (no timing side channel) and registers it with `waitUntil` from
+  `@vercel/functions`, so a Vercel Function stays alive until the SMTP conversation ends. Outside Vercel `waitUntil`
+  is a no-op and the long-running server simply finishes the promise. (Before this, a bare `void mail.send(...)` meant
+  the production function on Vercel was frozen as soon as the response was written: reset and verification emails never left.)
+* **Gmail SMTP**: `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER` = the full Gmail
+  address, `SMTP_PASS` = a 16-character **App Password** (needs 2-Step Verification; a normal account password is
+  refused with `535 5.7.8`). `EMAIL_FROM` should use the same address. The API logs a start-up warning when
+  `SMTP_USER`/`SMTP_PASS` look swapped, and logs `Failed to send <kind> email: <provider error>` (never the body or
+  recipient) when the provider rejects a message.
 
 ## Vercel setup
 
-Vercel hosts the **Next.js web app** (`frontend/`). The NestJS API needs a long-running Node host (the repo ships `backend/Dockerfile`; e.g. Fly.io, Render, Railway, ECS) with PostgreSQL.
+Production runs as three Vercel projects deployed from their own directories with the CLI
+(`cd frontend && vercel deploy --prod`, same for `backend/` and `rag_agent/`). The API runs as one Vercel Function
+(`backend/api/index.mjs`, see `backend/scripts/bundle-vercel.mjs`).
 
-1. Import the repo in Vercel and set **Root Directory** to `frontend`. Framework preset: Next.js.
-2. Environment variables (Production and Preview): `BACKEND_URL=https://api-internal.example.com` (the API's public URL), `NEXT_PUBLIC_SITE_URL=https://YOUR-DOMAIN`.
-   Redeploy after changing `BACKEND_URL` (build-time).
-3. On the **API host**: all backend variables above, with `BETTER_AUTH_URL` and `FRONTEND_ORIGIN` set to the **Vercel domain** (the browser only ever talks to that origin, so cookies stay first-party and `SameSite=Lax` works).
-4. Add the Google redirect URI for the Vercel domain (above). Preview deployments get new domains, so either skip Google on previews or register them.
-5. Client IP: a Vercel rewrite to another host is not guaranteed to forward the real client IP in a form the API trusts. Until you have confirmed what your API sees, put the API behind a proxy that sets `X-Forwarded-For`, and set `TRUSTED_PROXIES` (the API refuses to start in production without it). **This has not been verified on Vercel.** Without a trustworthy IP, the per-IP limits are weak, though the per-address OTP cooldown, hourly cap and five-guess limit still apply because they do not depend on the IP.
-6. There is no `vercel.json` in this repo and none is required for this feature.
+1. **Web project** (`frontend/`): `BACKEND_URL` (the API's URL; **build time**, baked into the `/api/v1/*` rewrite) and
+   `NEXT_PUBLIC_SITE_URL` (the public web origin).
+2. **API project** (`backend/`): all backend variables above. `BETTER_AUTH_URL` and `FRONTEND_ORIGIN` are the **web**
+   origin (the browser only ever talks to it, so cookies stay first-party and `SameSite=Lax` works).
+3. Variables are read when the function boots. **Adding or changing one does nothing until the project is redeployed**
+   (Google stayed off in production for exactly this reason: the Google variables were added after the last deploy).
+   Check with `GET /api/v1/config/auth` → `googleEnabled`.
+4. Google redirect URI: `<BETTER_AUTH_URL>/api/v1/auth/callback/google`, registered exactly in Google Cloud Console.
+   Preview deployments get new domains, so either skip Google on previews or register them.
+5. All variables are currently scoped to **Production** only, so a Preview deployment of the API cannot start.
+6. The web project is connected to the GitHub repo with Root Directory `.`, so pushes used to start a production build
+   of the repository root, which fails (no `app` directory). The root `vercel.json` turns those Git deployments off;
+   remove it (and set the project's Root Directory to `frontend`) if you want push-to-deploy instead of CLI deploys.
+7. Client IP: see `TRUSTED_PROXIES` in DEPLOYMENT.md. **Not verified on Vercel.** The per-address OTP cooldown, hourly
+   cap and five-guess limit do not depend on the IP.
 
 ## Migration steps
 

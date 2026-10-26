@@ -18,9 +18,9 @@ function GoogleMark() {
 }
 
 /**
- * "Continue with Google". Rendered only when the backend reports Google OAuth
- * is configured. In development, an unconfigured server shows setup guidance;
- * in production the button is simply absent.
+ * "Continue with Google". The button appears only when the backend reports Google OAuth is configured. When it is
+ * not (or the configuration could not be loaded) we say so instead of silently dropping the option: in development
+ * with setup guidance, in production with a short, secret-free notice that email sign-in still works.
  */
 export function GoogleSection({ next }: { next: string }) {
   const { state } = useAuthConfig();
@@ -36,12 +36,18 @@ export function GoogleSection({ next }: { next: string }) {
     );
   }
   if (state.status !== "ready" || !state.data.googleEnabled) {
-    if (process.env.NODE_ENV !== "development") return null;
+    if (process.env.NODE_ENV === "development") {
+      return (
+        <Alert tone="info" title="Google sign-in is not configured" className="mb-6">
+          Development only: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env
+          (see docs/DEPLOYMENT.md) to enable it.
+        </Alert>
+      );
+    }
     return (
-      <Alert tone="info" title="Google sign-in is not configured" className="mb-6">
-        Development only: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env
-        (see docs/DEPLOYMENT.md) to enable it.
-      </Alert>
+      <p role="status" className="mb-6 text-center text-sm text-ink-muted">
+        Google sign-in is unavailable right now. Please use your email and password.
+      </p>
     );
   }
 
