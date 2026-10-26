@@ -21,6 +21,36 @@ import type { PlatformSetting } from "./types";
 
 type Value = boolean | number | string;
 
+/** The three demo roles, in the order they are listed. The keys are `demo.<role>.visible` and `demo.<role>.enabled`. */
+const DEMO_ROLES = [
+  { role: "customer", label: "Demo Customer", extraOn: "Visitors will be able to explore the customer side with fictional data and simulated payments." },
+  { role: "worker", label: "Demo Worker", extraOn: "Visitors will be able to explore the professional side with fictional data." },
+  { role: "admin", label: "Demo Admin", extraOn: "Visitors will be able to open a read-only view of the admin panel, with fictional data only." },
+] as const;
+
+const demoRiskNotes = Object.fromEntries(
+  DEMO_ROLES.flatMap(({ role, label, extraOn }) => [
+    [
+      `demo.${role}.visible`,
+      {
+        nowOn: `${label} is listed on the public login page.`,
+        nowOff: `${label} is not listed on the login page.`,
+        turnOn: `Turning ON lists ${label} on the public login page for every visitor.`,
+        turnOff: `Turning OFF removes ${label} from the login page. It does not end sessions or block new ones: if “Allow new demo sessions” is on, people who have the direct link can still start one.`,
+      },
+    ],
+    [
+      `demo.${role}.enabled`,
+      {
+        nowOn: `${label} accepts new demo sessions.`,
+        nowOff: `${label} refuses new demo sessions, whether or not it is visible.`,
+        turnOn: `Turning ON lets the backend start new ${label} sessions (from the login page if it is visible, or from the direct link). ${extraOn}`,
+        turnOff: `Turning OFF refuses every new ${label} session AND signs out everyone who is using ${label} right now, immediately.`,
+      },
+    ],
+  ]),
+) as Record<string, { nowOn: string; nowOff: string; turnOn: string; turnOff: string }>;
+
 /**
  * What the settings that change the whole platform's behaviour do, in plain words: `now` describes the
  * current state, `turnOn`/`turnOff` describe what the change causes.
@@ -44,6 +74,7 @@ export const RISK_NOTES: Record<string, { nowOn: string; nowOff: string; turnOn:
     turnOn: "Turning ON lets the AI assistant answer questions again.",
     turnOff: "Turning OFF makes the AI assistant stop answering: people asking it a question get an unavailable message until you turn it back on.",
   },
+  ...demoRiskNotes,
 };
 
 const show = (v: Value) => (typeof v === "boolean" ? (v ? "On" : "Off") : v === "" ? "(empty)" : String(v));
@@ -67,14 +98,17 @@ export function SettingsView() {
       <ApiView state={state} reload={reload} skeleton={<Skeleton className="h-64" />}>
         {({ settings }) => {
           if (settings.length === 0) return <EmptyState icon={Settings} title="No settings" headingLevel={2}>The server did not return any settings.</EmptyState>;
-          const groups = [...new Set(settings.map((s) => s.group))];
+          const demo = settings.filter((s) => s.key.startsWith("demo."));
+          const rest = settings.filter((s) => !s.key.startsWith("demo."));
+          const groups = [...new Set(rest.map((s) => s.group))];
           return (
             <div className="space-y-8">
+              {demo.length > 0 && <DemoAccessSettings settings={demo} editable={manage} onPropose={(setting, value) => setPending({ setting, value })} />}
               {groups.map((group) => (
                 <section key={group} aria-labelledby={`group-${group}`} className="space-y-3">
                   <h2 id={`group-${group}`} className="text-lg font-bold text-brand-950">{group}</h2>
                   <ul className="space-y-3">
-                    {settings.filter((s) => s.group === group).map((s) => (
+                    {rest.filter((s) => s.group === group).map((s) => (
                       <li key={s.key}>
                         <SettingCard setting={s} editable={manage} onPropose={(value) => setPending({ setting: s, value })} />
                       </li>
@@ -92,6 +126,7 @@ export function SettingsView() {
           open
           title={`Change “${pending.setting.label}”?`}
           confirmLabel="Save change"
+          tone={pending.setting.key.startsWith("demo.") && pending.setting.key.endsWith(".enabled") && pending.value === false ? "danger" : "primary"}
           reason="required"
           minReasonLength={3}
           onClose={() => setPending(null)}
@@ -109,6 +144,80 @@ export function SettingsView() {
         </ConfirmDialog>
       )}
     </AdminPage>
+  );
+}
+
+/**
+ * The demo log-in options, in ONE place (not in the generic group list), because the two switches of a role only
+ * make sense together: "visible" is about the public login page, "enabled" is about whether the backend starts sessions.
+ * A switch always shows the last value the server reported; it moves only after a saved change is reloaded.
+ */
+function DemoAccessSettings({ settings, editable, onPropose }: { settings: PlatformSetting[]; editable: boolean; onPropose: (setting: PlatformSetting, value: Value) => void }) {
+  const byKey = new Map(settings.map((s) => [s.key, s]));
+  return (
+    <section aria-labelledby="demo-access-heading" className="space-y-3">
+      <h2 id="demo-access-heading" className="text-lg font-bold text-brand-950">Demo Access Settings</h2>
+      <p className="text-sm text-ink-muted">
+        “Visible” controls whether the option is listed on the public login page. “Allow new demo sessions” controls whether the backend starts new sessions. A hidden option can stay enabled (reachable only by a direct link); a disabled option is refused whether or not it is visible. Turning “allow” off also signs out open sessions of that role. Demo Admin is read-only and only ever shows fictional data.
+      </p>
+      <ul className="grid gap-3 lg:grid-cols-3">
+        {DEMO_ROLES.map(({ role, label }) => {
+          const visible = byKey.get(`demo.${role}.visible`);
+          const enabled = byKey.get(`demo.${role}.enabled`);
+          if (!visible && !enabled) return null;
+          return (
+            <li key={role}>
+              <DemoRoleCard role={role} label={label} visible={visible} enabled={enabled} editable={editable} onPropose={onPropose} />
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function DemoRoleCard({ role, label, visible, enabled, editable, onPropose }: { role: string; label: string; visible?: PlatformSetting; enabled?: PlatformSetting; editable: boolean; onPropose: (setting: PlatformSetting, value: Value) => void }) {
+  const id = useId();
+  const headingId = `${id}-heading`;
+  const state = [
+    visible ? (visible.value === true ? "Visible on login page" : "Hidden from login page") : null,
+    enabled ? (enabled.value === true ? "Accepting new sessions" : "Not accepting new sessions") : null,
+  ].filter(Boolean).join(" · ");
+  const rows = [
+    { setting: visible, name: "Visible on login page" },
+    { setting: enabled, name: "Allow new demo sessions" },
+  ];
+  return (
+    <Card className="flex h-full flex-col gap-4 p-5">
+      <div>
+        <h3 id={headingId} className="font-bold text-ink">{label}</h3>
+        <p className="mt-1 text-sm font-semibold text-ink-muted">{state}</p>
+      </div>
+      {role === "admin" && (
+        <Alert tone="warning" title="Privileged, but read-only">
+          Demo Admin opens the admin panel. It cannot change anything, and it only ever shows fictional data. Allow it only if you want visitors to see the admin panel.
+        </Alert>
+      )}
+      <div className="space-y-3">
+        {rows.map(({ setting, name }) => {
+          if (!setting) return null;
+          const nameId = `${id}-${setting.key}-name`;
+          return (
+            <div key={setting.key} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <div className="min-w-0">
+                <p id={nameId} className="text-sm font-semibold">{name}</p>
+                <p className="text-xs text-ink-subtle">{setting.description}</p>
+              </div>
+              {editable ? (
+                <Control id={`${id}-${setting.key}`} labelId={`${headingId} ${nameId}`} setting={setting} onPropose={(value) => onPropose(setting, value)} />
+              ) : (
+                <p className="font-semibold">{show(setting.value)}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 

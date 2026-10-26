@@ -16,7 +16,7 @@ import { TextArea } from "@/components/ui/text-area";
 import { TextInput } from "@/components/ui/text-input";
 import { api, ApiError } from "@/lib/api";
 import { formatBdt, formatDateTime } from "@/lib/format";
-import { describePayment, EVENT_COPY, isOpen, PROVIDER_LABELS, REFUND_COPY } from "@/lib/payment-status";
+import { awaitsDemoOutcome, describePayment, EVENT_COPY, isOpen, PROVIDER_LABELS, REFUND_COPY, SIMULATED_NOTE } from "@/lib/payment-status";
 import type { PaymentDetail } from "@/lib/payment-types";
 import { PaymentBadge } from "./payment-badge";
 
@@ -96,6 +96,7 @@ export function Detail({ data, reload, returned, gaveUp = false, refreshFailed =
         {refreshFailed && open && <Alert tone="warning">We could not refresh this payment just now. The last status shown may be out of date; we will keep trying.</Alert>}
         {returned && open && !gaveUp && !refreshFailed && <p className="text-sm text-ink-muted">Checking with the payment provider…</p>}
         {open && gaveUp && <Alert tone="info">Still waiting for the provider. You can leave this page; come back to your payments later to see the result.</Alert>}
+        {payment.provider === "DEMO" && <Alert tone="warning" title="Simulated payment">{SIMULATED_NOTE}. This payment was made on the demo payment page; no real money was charged.</Alert>}
         {payment.mode === "sandbox" && <Alert tone="warning" title="Test payment">This was made in the provider&apos;s test (sandbox) environment. No real money moved.</Alert>}
         {payment.status === "REQUIRES_REVIEW" && <p className="text-sm text-ink-muted">Keep this reference: <span className="font-mono">{payment.reference}</span>. Support contact details are not published yet; an administrator can look the payment up by it.</p>}
       </div>
@@ -116,6 +117,8 @@ export function Detail({ data, reload, returned, gaveUp = false, refreshFailed =
         </dl>
         <p className="mt-4 text-sm"><Link href={`/bookings/${payment.booking.id}`} className="font-semibold text-brand-700 hover:underline">View the booking</Link></p>
       </Card>
+
+      {awaitsDemoOutcome(payment) && <LinkButton href={`/payments/demo/${payment.reference}`} variant="accent">Open the demo payment page</LinkButton>}
 
       {(payment.status === "FAILED" || payment.status === "CANCELLED" || payment.status === "EXPIRED") && (
         <LinkButton href={`/bookings/${payment.booking.id}/pay`} variant="accent">Try paying again</LinkButton>

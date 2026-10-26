@@ -1,7 +1,14 @@
 import type { BadgeTone } from "@/components/ui/badge";
+import { isPaymentReference } from "./route-params";
 import type { PaymentStatus, PaymentView, ProviderId, RefundStatus } from "./payment-types";
 
-export const PROVIDER_LABELS: Record<ProviderId, string> = { BKASH: "bKash" };
+export const PROVIDER_LABELS: Record<ProviderId, string> = { BKASH: "bKash", DEMO: "Simulated payment (demo)" };
+
+/** Shown wherever a demo payment appears, so a simulated payment can never be mistaken for a real one. */
+export const SIMULATED_NOTE = "Simulated — no money moves";
+
+/** A demo payment waits for the customer to pick an outcome on the demo payment page while it is in these states. */
+export const awaitsDemoOutcome = (p: Pick<PaymentView, "provider" | "status">) => p.provider === "DEMO" && (p.status === "INITIATED" || p.status === "PROCESSING");
 
 /** Statuses where the outcome is still being decided: the page keeps asking the server. */
 export const OPEN_STATUSES: readonly PaymentStatus[] = ["PENDING", "INITIATED", "PROCESSING"];
@@ -22,6 +29,24 @@ export type StatusCopy = {
  */
 export function describePayment(p: Pick<PaymentView, "status" | "provider" | "needsAttention" | "bookingIneligible" | "refundedAmountBdt">): StatusCopy {
   const provider = PROVIDER_LABELS[p.provider];
+  if (p.provider === "DEMO") {
+    // Nothing is sent to an outside provider, so none of the provider wording applies.
+    switch (p.status) {
+      case "SUCCEEDED":
+        if (!p.bookingIneligible) return { badge: "Verified", tone: "success", alert: "success", headline: "Simulated payment completed", message: "This was a demo payment you marked as successful. No real money moved." };
+        break;
+      case "INITIATED":
+      case "PENDING":
+      case "PROCESSING":
+        return { badge: "Waiting", tone: "warning", alert: "info", headline: "Waiting for you to finish the simulated payment", message: "Open the demo payment page and choose an outcome. No real money is involved." };
+      case "FAILED":
+        return { badge: "Not completed", tone: "danger", alert: "error", headline: "Simulated payment failed", message: "You chose to fail this demo payment. You can try again; no real money moved." };
+      case "CANCELLED":
+        return { badge: "Cancelled", tone: "neutral", alert: "info", headline: "Simulated payment cancelled", message: "You cancelled this demo payment. You can start a new one; no real money moved." };
+      default:
+        break;
+    }
+  }
   switch (p.status) {
     case "SUCCEEDED":
       return p.bookingIneligible
@@ -77,12 +102,28 @@ export const EVENT_COPY: Record<string, string> = {
   "refund.failed": "Refund failed",
 };
 
-/** Only follow a provider URL that is https. The backend already limits it to the provider's hosts. */
+const DEMO_CHECKOUT_PATH = /^\/payments\/demo\/([^/?#]+)$/;
+
+/** True for this app's own simulated checkout page, `/payments/demo/<reference>`, and nothing else. */
+function isDemoCheckoutPath(path: string) {
+  const reference = DEMO_CHECKOUT_PATH.exec(path)?.[1];
+  return reference !== undefined && isPaymentReference(reference);
+}
+
+/**
+ * Only follow a provider URL that is https (the backend already limits it to the provider's hosts), or the app's own
+ * simulated checkout page: `/payments/demo/<reference>`, relative or absolute with THIS page's origin. A demo URL on
+ * any other origin that is not https is refused.
+ */
 export function isSafeCheckoutUrl(url: unknown): url is string {
   if (typeof url !== "string") return false;
+  if (isDemoCheckoutPath(url)) return true;
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" && !parsed.username && !parsed.password;
+    if (parsed.username || parsed.password) return false;
+    if (parsed.protocol === "https:") return true;
+    const origin = typeof window === "undefined" ? undefined : window.location?.origin;
+    return Boolean(origin) && parsed.origin === origin && !parsed.search && !parsed.hash && isDemoCheckoutPath(parsed.pathname);
   } catch {
     return false;
   }

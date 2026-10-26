@@ -134,3 +134,15 @@ Rolling back means dropping `chat_message` and `booking.arrivedAt`; there is no 
 * Arrival is not location-verified.
 * A paid booking can only be cancelled through a dispute, and there is still no refund fee/deadline policy.
 * Email/SMS/push notifications for these events do not exist.
+
+## The same workflow in the demo (see [DEMO.md](DEMO.md))
+
+Demo Customer and Demo Worker run exactly this lifecycle, with these differences, all enforced in the backend:
+
+- They live in the **demo realm**: they can only see and book the fictional demo professionals, and nothing they do is visible to ordinary users, admin lists, revenue figures or the public directory. The database also refuses a booking that connects a demo account with an ordinary one.
+- **Payment is simulated.** `POST /bookings/:id/payments` accepts only `{provider:"DEMO"}` for them (bKash is unreachable even when configured). The "checkout" is `/payments/demo/<reference>`; the outcome the visitor picks is applied through the same `applyVerification` state machine, so only a *successful* simulated payment moves `COMPLETION_PENDING` to `COMPLETED` and unlocks the review. A real booking can never be paid by the simulation, and a real payment can never be settled by a demo outcome.
+- No email is sent and no provider is called by any demo action; the AI assistant and identity-document uploads are closed.
+- Refunds follow the normal rule (cancelled bookings only) and can never be executed: the `DEMO` adapter has refunds disabled and the Demo Admin is read-only.
+- Chat authorization is unchanged (only the booking's two participants); a Demo Admin or a real user gets "not found".
+
+Verified by `backend/test/demo-workflow.e2e-spec.ts` (request, accept, chat, arrive, start, finish, simulated pay incl. a failed attempt and retry, complete, review, no provider call, no mail) and a real-Chrome pass (`frontend/e2e/demo.mjs`).

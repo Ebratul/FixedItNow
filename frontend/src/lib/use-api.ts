@@ -68,6 +68,8 @@ export type Me = {
     approved: boolean;
     profile?: WorkerProfile;
   };
+  /** Non-null only for a demo session (a shared, fictional identity). */
+  demo?: { role: "customer" | "worker" | "admin" } | null;
 };
 
 export type WorkerService = {

@@ -19,7 +19,7 @@ type PaymentDetailData = {
   reference: string;
   bookingId: string;
   provider: string;
-  mode: "live" | "sandbox";
+  mode: "live" | "sandbox" | "simulated";
   status: string;
   amountBdt: number;
   currency: string;
@@ -92,7 +92,7 @@ function Body({ p, onChanged }: { p: PaymentDetailData; onChanged: () => void })
           <h2 className="font-mono text-xl font-extrabold break-all text-brand-950">{p.reference}</h2>
           <StatusBadge value={p.status} map={PAYMENT_STATUS} />
           {p.needsAttention && <Badge tone="warning">Needs attention</Badge>}
-          <Badge>{p.mode === "live" ? "Live payment" : "Sandbox (test) payment"}</Badge>
+          <Badge>{p.mode === "live" ? "Live payment" : p.mode === "simulated" ? "Simulated (demo) payment" : "Sandbox (test) payment"}</Badge>
         </div>
         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Fact label="Amount">{formatBdt(p.amountBdt)} {p.currency}</Fact>

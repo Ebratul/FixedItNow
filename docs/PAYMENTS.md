@@ -272,3 +272,7 @@ Things I could not confirm without real accounts; the code is written so each is
 
 Worker payouts, escrow, commissions/fees, deposits, subscription/recurring payments, bKash agreements/tokenized wallets, payment-link emails/SMS, receipts/invoices,
 admin UI for payments, manual-refund recording, scheduled reconciliation, notifications.
+
+## Simulated payments for demo accounts
+
+`PaymentProvider` has a third value, `DEMO`, used **only** for the public demo ([DEMO.md](DEMO.md) section 8). `DemoPaymentAdapter` has no credentials and never touches the network; `PaymentProviders.get()` returns it only inside the demo realm and returns bKash only outside it. A database trigger (`payment_realm_guard`) refuses a `DEMO` payment for an ordinary customer and a real-provider payment for a demo customer, and a `DEMO` payment can never be `isLive`. `POST /payments/:reference/demo-outcome` (demo customers only, strict body `{outcome}`) settles a simulated payment through `applyVerification`, with a verification built from the stored attempt. Everything above for real payments (idempotency, one open attempt, one paid payment per booking, verification before completion, append-only events) applies unchanged, and demo payments are excluded from real finance reports. Still unverified: the real bKash sandbox.

@@ -176,3 +176,8 @@ with Google" gets a clear `account_not_linked` message instead of silent merging
 * **Audit:** append-only trigger + SHA-256 hash chain verified inside PostgreSQL; metadata sanitiser; the residual risk (superuser rebuilding the chain, TRUNCATE, deleting the newest rows) needs an external head-hash anchor and restricted database roles.
 * **Confirmation:** money-moving, access-removing and publishing actions require `confirm: true` server-side in addition to the UI dialog.
 * **Maintenance mode** never blocks payment-provider callbacks (money in flight must land) or administrators.
+
+## Demo access (see [DEMO.md](DEMO.md))
+
+Threat: a public, credential-free login (including a privileged admin identity) next to real users' data and real money.
+Controls: (1) the login endpoint accepts only a role *name* from three, maps it server-side to a fixed user, checks the administrator's `enabled` switch on every call and on every later request, checks Origin (login CSRF), is rate limited per IP and capped per role; (2) the realm firewall in `PrismaService` plus database triggers keep demo and real data apart in both directions; (3) the Demo Admin is read-only on every route and its permissions are intersected with a code allow-list; (4) demo sessions cannot use account routes (credentials, linking, session list/revoke), the AI model or document uploads; (5) payments use a simulated provider that cannot reach bKash, enforced in code and in the database; (6) demo addresses are reserved `.invalid` names and mail to them is suppressed; (7) settings changes and the sessions they end are audited. Residual risks (shared identities, drift, per-process write budget, unverified production cookie/IP behaviour) are listed in DEMO.md section 9 and 12.

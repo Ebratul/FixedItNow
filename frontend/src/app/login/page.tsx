@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { DemoLoginSection } from "@/components/auth/demo-login-section";
 import { LoginForm } from "@/components/auth/login-form";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -27,6 +28,7 @@ export default function LoginPage() {
       <Suspense fallback={<Skeleton className="h-64" />}>
         <LoginForm />
       </Suspense>
+      <DemoLoginSection />
     </AuthShell>
   );
 }

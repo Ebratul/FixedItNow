@@ -247,3 +247,48 @@ The old tests encoded rules that this workflow deliberately replaces; they were 
 
 Requested change: the customer can declare the work finished themselves when it was done before the scheduled time (the professional's arrival/start window opens only 30 minutes before the appointment). This **supersedes** the earlier rule that only the assigned professional can report completion. New action `customer_finish` (`POST /bookings/:id/mark-finished`, customer only, from `CONFIRMED`/`IN_PROGRESS`) moves the booking to `COMPLETION_PENDING`; it does not complete or pay anything, only a verified payment still does, and a dispute remains possible. The professional is notified. Also fixed: the progress strip's outlined "next" step looked like a completed step (now labelled "Next"), and the professional now sees when arrival/start open (`startWindowOpensAt`).
 Verified: state-machine unit test (every status x role), 3 new e2e tests (permissions, early finish then pay then review, in-progress, invalid states, reschedule withdrawn, double press), 1 new UI test; the real-Chrome scripts were NOT re-run after this change.
+
+## Follow-up: demo access ("Explore Demo")
+
+Design and operation: [DEMO.md](DEMO.md). Nothing was committed, pushed, deployed or applied to the remote database in `backend/.env`; the two migrations (`20261103000000_demo_payment_provider`, `20261103010000_demo_access`) were applied only to scratch PostgreSQL databases (port 5436). `prisma migrate diff` against the schema reports no difference.
+
+### Commands run and results (real output)
+
+| Command | Result |
+| --- | --- |
+| `cd backend && npm run test:e2e` (real PostgreSQL, mock bKash) | baseline before the change: 38 files, 722 tests passed. After: **42 files, 792 tests passed** (70 new: demo-access 28, demo-isolation 20, demo-workflow 9, demo-settings 13; `route-audit` updated for the one new public route) |
+| `cd backend && npx vitest run` (unit) | **22 files, 145 tests passed** (new: realm classification, demo config, DemoGuard) |
+| `cd backend && npx tsc --noEmit` | clean |
+| `cd backend && npm run lint` | 1 warning, pre-existing (`PaymentProvider` unused import in `payment-provider.ts`, present at HEAD) |
+| `cd frontend && npx vitest run` | **28 files, 425 tests passed** (baseline 24 files / 347) |
+| `cd frontend && npx tsc --noEmit`, `npx eslint src e2e/demo.mjs` | clean |
+| `cd frontend && node e2e/demo.mjs` (real Chrome 1.64 via playwright-core against a production web build + API on a scratch database) | **14 of 14 steps passed**: default hidden; admin signs in and flips the six switches through the reason dialog; login page at 375 and 1366 px (no overflow, axe clean); Demo Customer double-click gives one session, HttpOnly + SameSite=Lax cookie, nothing in web storage, simulated payment completes the booking, Exit demo; Demo Worker lands on the worker side and accepts a request; Demo Admin sees demo users only, a write is refused, no demo switches visible; switching Demo Admin off ends its open session and shows it unavailable |
+
+### Requirement classification
+
+| Requirement | Status | Evidence / notes |
+| --- | --- | --- |
+| Three demo options on the login page, descriptions, loading and double-click protection, mobile + desktop | **COMPLETE** | unit tests + browser pass |
+| Redirect to the right dashboard, Demo mode indicator, exit | **COMPLETE** | browser pass |
+| Normal login, Google, email OTP, registration unaffected | **COMPLETE for the code paths** | existing suites (auth, email-otp, google-*, onboarding) pass unchanged. **Real Google and real SMTP: NOT RUN** (no credentials, as before) |
+| Admin "Demo Access Settings", independent visibility/availability, persistence, audit, failed update keeps last state | **COMPLETE** | demo-settings e2e (restart simulated with a second app instance), browser pass |
+| Public safe read-only options endpoint | **COMPLETE** | exposes nothing but visible options |
+| Idempotent seed, fictional data, no destructive startup | **COMPLETE** | `npm run demo:seed`; idempotency, constraint-valid data and "refuses to seed over a real account" tested |
+| Reset | **COMPLETE** | `npm run demo:reset -- --yes`, tested to remove demo rows only and restore the append-only triggers |
+| Demo Admin hardening (dedicated identity, read-only, allow-list, no settings access, tests on every route) | **COMPLETE** | dynamic test refuses every state-changing route; widening the role row behind the app's back grants nothing |
+| Session isolation, cookies, CSRF, expiry, logout, rate limits | **COMPLETE** | cookie flags tested (Secure in a production-mode app); **real HTTPS / Vercel: NOT RUN** |
+| Data isolation demo vs real, both directions | **COMPLETE** | realm firewall + DB triggers; tests fill both realms and cross from each side |
+| Concurrency of shared identities | **COMPLETE as a documented trade-off** | shared identities, no per-visitor sandbox (append-only tables); drift until reset; DEMO.md section 9 |
+| Simulated payments; no real provider/refund/mail from demo | **COMPLETE** | the provider mock records zero calls and the mail outbox stays empty through the whole demo flow |
+| Real bKash sandbox | **BLOCKED / NOT RUN** | no credentials (unchanged) |
+| Applying the migrations to a database with real data / production | **NOT RUN** | by instruction; reviewed SQL only. Run `npm run db:deploy` yourself, then `npm run demo:seed` |
+| Hosted deployment check (Vercel) | **NOT RUN** | |
+| Load/performance of the realm filter | **NOT RUN** | each scoped query adds a join on the owning user |
+
+### Things worth knowing
+
+- `backend/.env` currently has `DATABASE_CONNECT_TIMEOUT_MS=100000`, above the allowed maximum (60000): a fresh `npm run start` / `nest start` fails env validation with that value (found when starting a QA API; I did not edit your `.env`).
+- Pre-existing, not caused by this change: signing out of any account on a page with many protected links makes Next prefetch `/login?next=...&_rsc=...` and receive 404s (reproduced with the ordinary admin account).
+- The discovery pages' server-side fetch now forwards the session cookie (only that cookie) to the backend so a demo visitor sees the demo professionals; `serverApi` previously forwarded none. The public endpoints use it only to choose the data realm.
+- Hidden-but-enabled roles: `/demo/<role>` still offers the button (the server decides), matching "hidden is not disabled".
+- Existing e2e fixtures needed one change: the test helper that clears roles keeps the new system role `demo_admin`.

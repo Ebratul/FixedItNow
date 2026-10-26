@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Noto_Sans_Bengali, Plus_Jakarta_Sans } from "next/font/google";
+import { DemoBanner } from "@/components/layout/demo-banner";
 import { HideOnAdmin } from "@/components/layout/hide-on-admin";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Skip to main content
         </a>
         <SiteHeader />
+        <DemoBanner />
         <SiteBanners />
         <main id="main" className="flex-1">
           {children}

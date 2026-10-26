@@ -47,3 +47,4 @@ next-env.d.ts
 /e2e/result.json
 /e2e/admin-result.json
 /e2e/workflow-result.json
+/e2e/demo-result.json

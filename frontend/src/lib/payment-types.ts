@@ -2,7 +2,10 @@ export type PaymentStatus =
   | "PENDING" | "INITIATED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED"
   | "REQUIRES_REVIEW" | "PARTIALLY_REFUNDED" | "REFUNDED";
 
-export type ProviderId = "BKASH";
+export type ProviderId = "BKASH" | "DEMO";
+
+/** "simulated" is the demo provider: no real money moves and no outside service is involved. */
+export type PaymentMode = "sandbox" | "live" | "simulated";
 
 export type RefundStatus = "REQUESTED" | "APPROVED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "REJECTED";
 
@@ -23,7 +26,7 @@ export type PaymentView = {
   reference: string;
   bookingId: string;
   provider: ProviderId;
-  mode: "sandbox" | "live";
+  mode: PaymentMode;
   status: PaymentStatus;
   amountBdt: number;
   currency: string;
@@ -54,7 +57,7 @@ export type ProviderInfo = {
   provider: ProviderId;
   label: string;
   available: boolean;
-  mode: "sandbox" | "live" | null;
+  mode: PaymentMode | null;
   minAmountBdt: number | null;
   maxAmountBdt: number | null;
 };

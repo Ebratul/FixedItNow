@@ -20,7 +20,7 @@ export type PaymentRow = {
   reference: string;
   bookingId: string;
   provider: string;
-  mode: "live" | "sandbox";
+  mode: "live" | "sandbox" | "simulated";
   status: string;
   amountBdt: number;
   refundedAmountBdt: number;
@@ -77,7 +77,7 @@ function PaymentsTab() {
     { key: "ref", header: "Reference", cell: (p) => <Link href={`/admin/payments/${p.reference}`} className="font-mono text-sm font-semibold text-brand-700 hover:underline">{p.reference}</Link> },
     { key: "status", header: "Status", cell: (p) => <span className="flex flex-wrap gap-1"><StatusBadge value={p.status} map={PAYMENT_STATUS} />{p.needsAttention && p.status !== "REQUIRES_REVIEW" && <Badge tone="warning">Needs attention</Badge>}</span> },
     { key: "amount", header: "Amount", align: "right", cell: (p) => <>{formatBdt(p.amountBdt)}{p.refundedAmountBdt > 0 && <span className="block text-xs text-ink-subtle">{formatBdt(p.refundedAmountBdt)} refunded</span>}</> },
-    { key: "provider", header: "Provider", hideBelow: "md", cell: (p) => <>{providerLabel(p.provider)}{p.mode === "sandbox" && <Badge className="ml-2">Sandbox</Badge>}</> },
+    { key: "provider", header: "Provider", hideBelow: "md", cell: (p) => <>{providerLabel(p.provider)}{p.mode === "sandbox" && <Badge className="ml-2">Sandbox</Badge>}{p.mode === "simulated" && <Badge className="ml-2">Simulated</Badge>}</> },
     { key: "customer", header: "Customer", hideBelow: "lg", cell: (p) => p.customer.name },
     { key: "created", header: "Created", hideBelow: "md", cell: (p) => formatDateTime(p.createdAt) },
     { key: "booking", header: "Booking", hideBelow: "lg", cell: (p) => <Link href={`/admin/bookings/${p.bookingId}`} className="text-brand-700 hover:underline">Open booking</Link> },

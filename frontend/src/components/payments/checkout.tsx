@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiError } from "@/lib/api";
 import type { BookingDetail } from "@/lib/booking-types";
 import { formatBdt, formatRange } from "@/lib/format";
-import { isSafeCheckoutUrl, PROVIDER_LABELS } from "@/lib/payment-status";
+import { isSafeCheckoutUrl, PROVIDER_LABELS, SIMULATED_NOTE } from "@/lib/payment-status";
 import type { PaymentView, ProviderId, ProviderInfo } from "@/lib/payment-types";
 import { useApi } from "@/lib/use-api";
 
@@ -145,6 +145,7 @@ export function Checkout({ detail, providers }: { detail: BookingDetail; provide
                     <Card className="flex h-full flex-col gap-3 p-5">
                       <p className="flex items-center gap-2 text-lg font-bold"><CreditCard className="size-5 text-brand-600" aria-hidden /> {PROVIDER_LABELS[p.provider]}</p>
                       {p.available && p.mode === "sandbox" && <p className="text-sm text-warning">Test mode: no real money is moved.</p>}
+                      {p.provider === "DEMO" && <p className="text-sm font-semibold text-warning">{SIMULATED_NOTE}: this is a demo and nothing is charged.</p>}
                       {!p.available ? (
                         <p className="text-sm text-ink-subtle">Not available right now.</p>
                       ) : outOfRange ? (
@@ -160,7 +161,11 @@ export function Checkout({ detail, providers }: { detail: BookingDetail; provide
               })}
             </ul>
           )}
-          <p className="flex items-start gap-2 text-sm text-ink-subtle"><ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden /> You will leave this site to pay on the provider&apos;s page. FixedItNow never sees your card details or PIN, and a payment counts only after we have confirmed it with the provider.</p>
+          {providers.some((p) => p.available && p.provider !== "DEMO") || !providers.some((p) => p.available && p.provider === "DEMO") ? (
+            <p className="flex items-start gap-2 text-sm text-ink-subtle"><ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden /> You will leave this site to pay on the provider&apos;s page. FixedItNow never sees your card details or PIN, and a payment counts only after we have confirmed it with the provider.</p>
+          ) : (
+            <p className="flex items-start gap-2 text-sm text-ink-subtle"><ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden /> You are in the demo, so the next page is a simulated payment page on this site. No card or mobile-wallet details are asked for and no real money moves.</p>
+          )}
         </section>
       )}
 

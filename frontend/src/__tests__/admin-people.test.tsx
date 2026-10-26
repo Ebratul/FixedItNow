@@ -33,6 +33,7 @@ import { SettingsView } from "@/components/admin/people/settings-view";
 import { UserDetailView } from "@/components/admin/people/user-detail";
 import { UsersList } from "@/components/admin/people/users-list";
 import { ApiError } from "@/lib/api";
+import { adminErrorMessage, readableError } from "@/components/admin/people/admin-errors";
 import type { Me } from "@/lib/use-api";
 
 const ALL = ["users.read", "users.suspend", "roles.read", "roles.manage", "admins.assign", "audit.read", "audit.verify", "settings.read", "settings.manage"];
@@ -452,5 +453,134 @@ describe("settings", () => {
     expect(screen.queryByRole("button", { name: "Review change" })).not.toBeInTheDocument();
     expect(screen.getByText(/Read-only/)).toBeInTheDocument();
     expect(screen.getByText("250")).toBeInTheDocument();
+  });
+});
+
+describe("demo access settings", () => {
+  const demoSetting = (role: string, kind: "visible" | "enabled", value: boolean) => ({
+    key: `demo.${role}.${kind}`, group: "Demo access", label: `Demo ${role} ${kind}`, description: `Explains ${role} ${kind}.`, effect: `Effect of ${role} ${kind}.`,
+    type: "boolean", value, default: false, isDefault: !value, updatedAt: null,
+  });
+  const platform = { key: "platform.maintenanceMode", group: "Platform", label: "Maintenance mode", description: "Blocks changes.", effect: "Global guard.", type: "boolean", value: false, default: false, isDefault: true, updatedAt: null };
+  // customer: visible + enabled, worker: hidden but enabled (direct link only), admin: visible but disabled.
+  const demo = [
+    demoSetting("customer", "visible", true), demoSetting("customer", "enabled", true),
+    demoSetting("worker", "visible", false), demoSetting("worker", "enabled", true),
+    demoSetting("admin", "visible", true), demoSetting("admin", "enabled", false),
+  ];
+  beforeEach(() => { data["/admin/settings"] = { settings: [platform, ...demo] }; });
+
+  const sw = (role: string, kind: "Visible on login page" | "Allow new demo sessions") =>
+    screen.getByRole("switch", { name: new RegExp(`Demo ${role}.*${kind}`) });
+
+  it("shows one section titled exactly 'Demo Access Settings', first, with the relationship explained, and not in the generic groups", () => {
+    renderAs(ALL, <SettingsView />);
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings[0]).toBe("Demo Access Settings");
+    expect(headings).toContain("Platform");
+    expect(headings).not.toContain("Demo access");
+    const section = screen.getByRole("region", { name: "Demo Access Settings" });
+    expect(within(section).getByText(/controls whether the option is listed on the public login page/)).toBeInTheDocument();
+    expect(within(section).getByText(/A hidden option can stay enabled \(reachable only by a direct link\); a disabled option is refused whether or not it is visible/)).toBeInTheDocument();
+    expect(within(section).getByText(/Turning “allow” off also signs out open sessions of that role/)).toBeInTheDocument();
+    expect(within(section).getByText(/Demo Admin is read-only and only ever shows fictional data/)).toBeInTheDocument();
+    // The six demo switches are in the section; the ordinary setting keeps its own card.
+    expect(within(section).getAllByRole("switch")).toHaveLength(6);
+    expect(screen.getAllByRole("switch")).toHaveLength(7);
+    expect(screen.getByRole("heading", { level: 3, name: "Demo Customer" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Demo Worker" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Demo Admin" })).toBeInTheDocument();
+  });
+
+  it("reports each role's two switches independently, with a state line", () => {
+    renderAs(ALL, <SettingsView />);
+    expect(sw("Customer", "Visible on login page")).toHaveAttribute("aria-checked", "true");
+    expect(sw("Customer", "Allow new demo sessions")).toHaveAttribute("aria-checked", "true");
+    expect(sw("Worker", "Visible on login page")).toHaveAttribute("aria-checked", "false");
+    expect(sw("Worker", "Allow new demo sessions")).toHaveAttribute("aria-checked", "true");
+    expect(sw("Admin", "Visible on login page")).toHaveAttribute("aria-checked", "true");
+    expect(sw("Admin", "Allow new demo sessions")).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("Visible on login page · Accepting new sessions")).toBeInTheDocument();
+    expect(screen.getByText("Hidden from login page · Accepting new sessions")).toBeInTheDocument();
+    expect(screen.getByText("Visible on login page · Not accepting new sessions")).toBeInTheDocument();
+  });
+
+  it("warns that Demo Admin is privileged but read-only, and only there", () => {
+    renderAs(ALL, <SettingsView />);
+    expect(screen.getAllByText("Privileged, but read-only")).toHaveLength(1);
+  });
+
+  it("changing 'visible' asks for a reason, then PUTs {value, reason} for that key only", async () => {
+    api.mockResolvedValue({ setting: {} });
+    renderAs(ALL, <SettingsView />);
+    fireEvent.click(sw("Worker", "Visible on login page"));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/lists Demo Worker on the public login page/)).toBeInTheDocument();
+    expect(api).not.toHaveBeenCalled(); // nothing before the confirmation
+    expect(within(dialog).getByRole("button", { name: "Save change" })).toBeDisabled(); // a reason is required
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Show it for the workshop" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save change" }));
+    await waitFor(() => expect(api).toHaveBeenCalledTimes(1));
+    expect(api).toHaveBeenCalledWith("/admin/settings/demo.worker.visible", { method: "PUT", body: { value: true, reason: "Show it for the workshop" } });
+    expect(await screen.findByText(/is now On/)).toBeInTheDocument();
+  });
+
+  it("turning 'allow' off says that open sessions are signed out", async () => {
+    api.mockResolvedValue({ setting: {} });
+    renderAs(ALL, <SettingsView />);
+    fireEvent.click(sw("Customer", "Allow new demo sessions"));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/refuses every new Demo Customer session AND signs out everyone who is using Demo Customer right now/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Workshop is over" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save change" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith("/admin/settings/demo.customer.enabled", { method: "PUT", body: { value: false, reason: "Workshop is over" } }));
+  });
+
+  it("turning the admin demo on explains what visitors will see", () => {
+    renderAs(ALL, <SettingsView />);
+    fireEvent.click(sw("Admin", "Allow new demo sessions"));
+    expect(within(screen.getByRole("dialog")).getByText(/read-only view of the admin panel/)).toBeInTheDocument();
+  });
+
+  it("on failure the dialog shows the error and the switch keeps the last server value (never optimistic)", async () => {
+    api.mockRejectedValue(new ApiError(403, "The demo administrator is read-only: changes are disabled in the demo.", {}, "DEMO_READ_ONLY"));
+    renderAs(ALL, <SettingsView />);
+    fireEvent.click(sw("Admin", "Visible on login page"));
+    expect(sw("Admin", "Visible on login page")).toHaveAttribute("aria-checked", "true"); // not flipped while asking
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Hide it" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save change" }));
+    expect(await within(dialog).findByText("The demo administrator is read-only: changes are disabled in the demo.")).toBeInTheDocument();
+    expect(sw("Admin", "Visible on login page")).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByText(/is now/)).not.toBeInTheDocument();
+  });
+
+  it("is read-only without settings.manage: states are shown, no working switches", () => {
+    renderAs(["settings.read"], <SettingsView />);
+    const section = screen.getByRole("region", { name: "Demo Access Settings" });
+    expect(within(section).queryByRole("switch")).not.toBeInTheDocument();
+    expect(within(section).getByText("Visible on login page · Accepting new sessions")).toBeInTheDocument();
+    expect(within(section).getByText("Hidden from login page · Accepting new sessions")).toBeInTheDocument();
+  });
+
+  it("omits the section when the server reports no demo settings", () => {
+    data["/admin/settings"] = { settings: [platform] };
+    renderAs(ALL, <SettingsView />);
+    expect(screen.queryByText("Demo Access Settings")).not.toBeInTheDocument();
+  });
+});
+
+describe("admin error messages for the demo", () => {
+  it("shows the server's sentence for DEMO_READ_ONLY and DEMO_RESTRICTED", () => {
+    const readOnly = new ApiError(403, "The demo administrator is read-only: changes are disabled in the demo.", {}, "DEMO_READ_ONLY");
+    expect(adminErrorMessage(readOnly)).toBe("The demo administrator is read-only: changes are disabled in the demo.");
+    expect(readableError(readOnly).message).toBe("The demo administrator is read-only: changes are disabled in the demo.");
+    expect(adminErrorMessage(new ApiError(403, "Chat is off in the demo.", {}, "DEMO_RESTRICTED"))).toBe("Chat is off in the demo.");
+  });
+
+  it("falls back to its own wording if the server sent no text, and leaves other 403s alone", () => {
+    expect(adminErrorMessage(new ApiError(403, " ", {}, "DEMO_READ_ONLY"))).toMatch(/read-only/);
+    expect(adminErrorMessage(new ApiError(403, "You don't have permission to do that.", {}, "PERMISSION_DENIED"))).toBe("You don't have permission to do that.");
+    expect(adminErrorMessage(new ApiError(403, "x", {}, "SELF_ACTION"))).toBe("You cannot do this to your own account.");
   });
 });

@@ -13,6 +13,11 @@ export function buildQuery(params: Record<string, string | number | boolean | un
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const response = await fetch(`/api/v1${path}`, { credentials: "same-origin" });
   if (!response.ok) {
+    if (response.status === 403) {
+      // The demo administrator's refusals carry their own sentence; anything else is plain "no permission".
+      const body = (await response.json().catch(() => null)) as { code?: unknown; message?: unknown } | null;
+      if (typeof body?.code === "string" && body.code.startsWith("DEMO_") && typeof body.message === "string" && body.message) throw new Error(body.message);
+    }
     throw new Error(response.status === 403 ? "You don't have permission to export this." : response.status === 429 ? "Too many exports. Wait a minute and try again." : "The export could not be created.");
   }
   const url = URL.createObjectURL(await response.blob());

@@ -34,6 +34,7 @@ Find a verified electrician, plumber, cleaner or technician, book them, chat, pa
 | ⭐ **Reviews & community** | One review per completed and paid booking, posts, comments, likes, reports, feature proposals and voting ([COMMUNITY](docs/COMMUNITY.md)) |
 | 🤖 **AI assistant** | Describe a need in plain language at `/assistant`; a separate Python service turns it into filters and the API returns real, database-verified professionals ([AI](docs/AI.md)) |
 | 🛡️ **Admin panel** | Roles and granular permissions, user / worker / booking / payment / support / content management, AI knowledge base, tamper-evident audit log ([ADMIN](docs/ADMIN.md)) |
+| 🎭 **Explore Demo** | "Continue as Demo Customer / Worker / Admin" on the login page, no sign-up; admin-controlled per-role visibility and availability, isolated fictional data, read-only Demo Admin, simulated payments ([DEMO](docs/DEMO.md)) |
 
 ## 🏗️ Architecture
 
@@ -115,6 +116,8 @@ set -a; . ./.env; set +a; .venv/bin/python -m app
 ```
 
 In development the email verification code and password-reset links are printed in the backend terminal. All environment variables and Google OAuth setup are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Without OpenRouter credentials the AI service runs in a rule-based "simple mode".
+
+To try the public demo: `npm run demo:seed` (in `backend`), then switch the options on in Admin → Platform settings → Demo Access Settings ([docs/DEMO.md](docs/DEMO.md)). Demo access is off by default.
 
 ## ✅ Checks
 

@@ -21,6 +21,8 @@ function Overview({ me }: { me: Me }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"logout" | "others" | null>(null);
   const [notice, setNotice] = useState<string>();
+  // The demo identities are shared by every visitor, so their sign-in settings and "other devices" are off limits.
+  const demo = Boolean(me.demo);
 
   async function logOut() {
     setBusy("logout");
@@ -159,24 +161,32 @@ function Overview({ me }: { me: Me }) {
         </LinkButton>
       </Card>
 
-      <SignInMethods />
+      {!demo && <SignInMethods />}
 
       <Card className="mt-5 p-6">
         <h2 className="flex items-center gap-2 text-lg font-bold">
           <LogOut className="size-5 text-brand-600" aria-hidden /> Sessions
         </h2>
-        <p className="mt-2 text-sm text-ink-muted">
-          Logging out ends this device&apos;s session. To end sessions on other devices, use the
-          second button.
-        </p>
+        {demo ? (
+          <p className="mt-2 text-sm text-ink-muted">
+            This is a shared demo account — sign-in settings are disabled. Logging out ends your demo session.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-ink-muted">
+            Logging out ends this device&apos;s session. To end sessions on other devices, use the
+            second button.
+          </p>
+        )}
         {notice && <Alert tone="info" className="mt-4">{notice}</Alert>}
         <div className="mt-4 flex flex-wrap gap-3">
           <Button onClick={logOut} loading={busy === "logout"}>
             Log out
           </Button>
-          <Button variant="secondary" onClick={logOutOthers} loading={busy === "others"}>
-            Log out other devices
-          </Button>
+          {!demo && (
+            <Button variant="secondary" onClick={logOutOthers} loading={busy === "others"}>
+              Log out other devices
+            </Button>
+          )}
         </div>
       </Card>
 

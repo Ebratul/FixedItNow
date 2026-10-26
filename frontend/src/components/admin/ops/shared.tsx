@@ -50,7 +50,7 @@ export const REFUND_STATUS: Record<string, Entry> = {
   REJECTED: { label: "Rejected", tone: "neutral" },
 };
 
-export const PROVIDER_LABEL: Record<string, string> = { BKASH: "bKash" };
+export const PROVIDER_LABEL: Record<string, string> = { BKASH: "bKash", DEMO: "Simulated (demo)" };
 export const providerLabel = (p: string) => PROVIDER_LABEL[p] ?? p;
 
 export type Paged = { page: number; pageSize: number; total: number; totalPages: number };

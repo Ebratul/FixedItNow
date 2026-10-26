@@ -104,31 +104,35 @@ function List({ role, group, page, onPage }: { role: "customer" | "worker"; grou
   );
 }
 
-export function BookingListView() {
-  const [role, setRole] = useState<"customer" | "worker">("customer");
+/** `initialRole` comes from `?role=worker` (the demo worker's landing page); it only applies to someone who is a worker. */
+export function BookingListView({ initialRole = "customer" }: { initialRole?: "customer" | "worker" }) {
+  const [chosen, setRole] = useState<"customer" | "worker">(initialRole);
   const [group, setGroup] = useState<string>("all");
   const [page, setPage] = useState(1);
   return (
     <AuthGate>
-      {(me) => (
-        <div>
-          <h1 className="text-h1 font-extrabold text-brand-950">Bookings</h1>
-          {me.worker.started && (
-            <div role="group" aria-label="View as" className="mt-6 flex flex-wrap gap-2">
-              <Chip active={role === "customer"} onClick={() => { setRole("customer"); setGroup("all"); setPage(1); }}>My requests</Chip>
-              <Chip active={role === "worker"} onClick={() => { setRole("worker"); setGroup("all"); setPage(1); }}>Jobs for me</Chip>
+      {(me) => {
+        const role = chosen === "worker" && !me.worker.started ? "customer" : chosen;
+        return (
+          <div>
+            <h1 className="text-h1 font-extrabold text-brand-950">Bookings</h1>
+            {me.worker.started && (
+              <div role="group" aria-label="View as" className="mt-6 flex flex-wrap gap-2">
+                <Chip active={role === "customer"} onClick={() => { setRole("customer"); setGroup("all"); setPage(1); }}>My requests</Chip>
+                <Chip active={role === "worker"} onClick={() => { setRole("worker"); setGroup("all"); setPage(1); }}>Jobs for me</Chip>
+              </div>
+            )}
+            <div role="group" aria-label="Filter" className="mt-4 flex flex-wrap gap-2">
+              {GROUPS.map((g) => (
+                <Chip key={g.value} active={group === g.value} onClick={() => { setGroup(g.value); setPage(1); }}>{g.label}</Chip>
+              ))}
             </div>
-          )}
-          <div role="group" aria-label="Filter" className="mt-4 flex flex-wrap gap-2">
-            {GROUPS.map((g) => (
-              <Chip key={g.value} active={group === g.value} onClick={() => { setGroup(g.value); setPage(1); }}>{g.label}</Chip>
-            ))}
+            <div className="mt-8">
+              <List role={role} group={group} page={page} onPage={setPage} />
+            </div>
           </div>
-          <div className="mt-8">
-            <List role={role} group={group} page={page} onPage={setPage} />
-          </div>
-        </div>
-      )}
+        );
+      }}
     </AuthGate>
   );
 }
